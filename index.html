@@ -401,8 +401,8 @@ function renderAds(){
   const total=CAMPS.reduce((s,c)=>s+c.amt.reduce((a,b)=>a+b,0),0);
   const upto=d=>CAMPS.reduce((s,c)=>s+c.amt.slice(0,d).reduce((a,b)=>a+b,0),0);
   const spent=upto(S.day), todaySp=visibleAds(S.day).reduce((s,a)=>s+a.amt,0);
-  let h=`<div class="tiles"><div class="tile"><small>Plan del mes</small><b class="num">${money(total)}</b></div><div class="tile"><small>Plan al día ${S.day}</small><b class="num">${money(spent)}</b></div><div class="tile"><small>Hoy</small><b class="num">${money(todaySp)}</b></div></div>`;
-  h+=`<p class="note">Los tres cuadros de arriba y las barras de abajo son del plan en Excel.</p>`;
+  let h=`<div class="tiles"><div class="tile"><small>Excel (solo plan)</small><b class="num">${money(total)}</b></div><div class="tile"><small>Excel al día ${S.day}</small><b class="num">${money(spent)}</b></div><div class="tile"><small>Hoy</small><b class="num">${money(todaySp)}</b></div></div>`;
+  h+=`<p class="note">Estos tres cuadros y las barras de abajo son del plan original en Excel ($18,000). El presupuesto real del mes es $24,000.</p>`;
   /* real spend */
   if(typeof ACTUALS!=='undefined' && ACTUALS.platforms){
     const th=ACTUALS.through||S.day;

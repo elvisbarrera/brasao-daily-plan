@@ -1,17 +1,13 @@
-<title>Plan Diario Brasão</title>
+<title>Elvis Barrera Agency · Brasão Octubre</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
-/* iOS-native look: system font, grouped inset lists, system blue accent. */
+/* Elvis Barrera Agency: dark charcoal, ember accent, system type. */
 :root{
-  --bg:#f2f2f7; --surface:#ffffff; --surface2:#f2f2f7; --fg:#1c1c1e; --fg2:#6c6c70; --fg3:#8e8e93; --line:#e5e5ea; --accent:#007aff; --accent-soft:#e6f0ff; --on-accent:#ffffff; --ok:#248a3d; --ok-soft:#e3f5e8; --warn:#b25000; --warn-soft:#fff1de; --bad:#d70015; --bad-soft:#ffe5e8; --ig:#c2307f; --tt:#1c1c1e; --fb:#0a66d9; --go:#2e9a4c; --bar:rgba(242,242,247,.78);
+  --bg:#0b0c10; --surface:#15171d; --surface2:#1d2027; --fg:#f3f1ec; --fg2:#a7a49c; --fg3:#74726c; --line:#262a33; --accent:#ff7a45; --accent-soft:#2b1a12; --on-accent:#140a05; --ok:#3dd68c; --ok-soft:#10301f; --warn:#ffb340; --warn-soft:#33250a; --bad:#ff6b5e; --bad-soft:#38161a; --ig:#ff6aa8; --tt:#f3f1ec; --fb:#6aa6ff; --go:#3dd68c; --bar:rgba(11,12,16,.78); color-scheme:dark;
   --serif:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,system-ui,sans-serif;
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#000000; --surface:#1c1c1e; --surface2:#2c2c2e; --fg:#ffffff; --fg2:#aeaeb2; --fg3:#8e8e93; --line:#38383a; --accent:#0a84ff; --accent-soft:#0b2c52; --on-accent:#ffffff; --ok:#30d158; --ok-soft:#10361f; --warn:#ff9f0a; --warn-soft:#3a2a08; --bad:#ff453a; --bad-soft:#3d1512; --ig:#ff6aa8; --tt:#ffffff; --fb:#64a3ff; --go:#30d158; --bar:rgba(0,0,0,.72); color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#000000; --surface:#1c1c1e; --surface2:#2c2c2e; --fg:#ffffff; --fg2:#aeaeb2; --fg3:#8e8e93; --line:#38383a; --accent:#0a84ff; --accent-soft:#0b2c52; --on-accent:#ffffff; --ok:#30d158; --ok-soft:#10361f; --warn:#ff9f0a; --warn-soft:#3a2a08; --bad:#ff453a; --bad-soft:#3d1512; --ig:#ff6aa8; --tt:#ffffff; --fb:#64a3ff; --go:#30d158; --bar:rgba(0,0,0,.72); color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -23,6 +19,16 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
 h1,h2,h3,p{margin:0}
 .num{font-variant-numeric:tabular-nums}
+
+
+/* masthead */
+.brand{max-width:660px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 18px) 2px 6px;display:flex;align-items:center;gap:12px}
+.mono{width:44px;height:44px;border-radius:12px;flex:none;display:grid;place-items:center;font-weight:800;font-size:17px;letter-spacing:-.02em;color:var(--on-accent);background:linear-gradient(145deg,#ff9a6a,#ff5a1f);box-shadow:0 6px 18px rgba(255,90,31,.28)}
+.brand-t{min-width:0}
+.brand-t b{display:block;font-size:15px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;line-height:1.1}
+.brand-t b i{font-style:normal;font-weight:400;color:var(--accent);letter-spacing:.16em}
+.brand-t span{display:block;margin-top:4px;font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--fg2)}
+.brand-t span em{font-style:normal;color:var(--fg)}
 
 /* sticky bar */
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px)));padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
@@ -185,6 +191,7 @@ td.g{color:var(--ok);font-weight:600} td.y{color:var(--warn);font-weight:600} td
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <div class="wrap">
+  <div class="brand"><div class="mono" aria-hidden="true">EB</div><div class="brand-t"><b>Elvis Barrera <i>Agency</i></b><span><em>Brasão</em> · Plan de octubre 2026</span></div></div>
   <header class="bar" id="bar"><div class="bar-in" id="barin"></div></header>
   <main id="view" aria-live="polite"></main>
 </div>

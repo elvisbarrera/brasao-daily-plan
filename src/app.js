@@ -193,16 +193,25 @@ function renderSemana(){
 }
 
 function renderAds(){
+  let REALH='';
   const total=CAMPS.reduce((s,c)=>s+c.amt.reduce((a,b)=>a+b,0),0);
   const upto=d=>CAMPS.reduce((s,c)=>s+c.amt.slice(0,d).reduce((a,b)=>a+b,0),0);
   const spent=upto(S.day), todaySp=visibleAds(S.day).reduce((s,a)=>s+a.amt,0);
-  let h=`<div class="tiles"><div class="tile"><small>Presupuesto</small><b class="num">${money(total)}</b></div><div class="tile"><small>Plan al día ${S.day}</small><b class="num">${money(spent)}</b></div><div class="tile"><small>Hoy</small><b class="num">${money(todaySp)}</b></div></div>`;
-  h+=`<p class="note">Son los montos del plan en Excel, no el gasto real de cada plataforma.</p>`;
+  let h=`<div class="tiles"><div class="tile"><small>Plan del mes</small><b class="num">${money(total)}</b></div><div class="tile"><small>Plan al día ${S.day}</small><b class="num">${money(spent)}</b></div><div class="tile"><small>Hoy</small><b class="num">${money(todaySp)}</b></div></div>`;
+  h+=`<p class="note">Los tres cuadros de arriba y las barras de abajo son del plan en Excel.</p>`;
+  /* real spend */
+  if(typeof ACTUALS!=='undefined' && ACTUALS.platforms){
+    const th=ACTUALS.through||S.day;
+    const real=ACTUALS.platforms.reduce((s,p)=>s+(p.spent||0),0);
+    const plan=CAMPS.filter(c=>!/Google/.test(c.platform)).reduce((s,c)=>s+c.amt.slice(0,th).reduce((a,b)=>a+b,0),0);
+    const diff=real-plan;
+    REALH=`<section class="sec"><h2>Gasto real <span>actualizado ${esc(ACTUALS.updated)}</span></h2><div class="tiles"><div class="tile"><small>Real (Meta + TikTok)</small><b class="num">${money(real)}</b></div><div class="tile"><small>Plan al día ${th}</small><b class="num">${money(plan)}</b></div><div class="tile"><small>${diff>=0?'Por encima':'Por debajo'}</small><b class="num" style="color:var(--${diff>=0?'warn':'ok'})">${money(Math.abs(diff))}</b></div></div><div class="group" style="margin-top:8px">`+ACTUALS.platforms.map(p=>`<details class="item"><summary><span>${esc(p.name)}</span><span class="num" style="font-weight:700">${p.spent==null?'—':money(p.spent)}</span></summary>${p.note?`<p>${esc(p.note)}</p>`:''}${(p.campaigns||[]).map(c=>`<p style="display:flex;justify-content:space-between;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><b class="num" style="color:var(--fg)">${money(c.spent)}</b></p>`).join('')}</details>`).join('')+`</div><p class="note">Gasto desde el 1 de octubre en Meta Ads Manager y TikTok. Las campañas reales no son las mismas que las del plan de abajo.</p></section>`;
+  }
   /* by platform */
   const by={}; CAMPS.forEach(c=>{ const k=c.platform; by[k]=by[k]||{t:0,s:0}; const t=c.amt.reduce((a,b)=>a+b,0); by[k].t+=t; by[k].s+=c.amt.slice(0,S.day).reduce((a,b)=>a+b,0) });
-  h+=`<section class="sec"><h2>Por plataforma</h2><div class="group">`+Object.keys(by).map(k=>`<div class="pbar"><div class="row"><span>${platName(k)}${/Facebook|^FB/.test(platName(k))||/^FB/.test(k)?' · '+k.replace('FB ',''):''}</span><span class="num">${money(by[k].s)} de ${money(by[k].t)}</span></div><div class="track"><i style="width:${by[k].t?Math.round(100*by[k].s/by[k].t):0}%"></i></div></div>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Plan por plataforma</h2><div class="group">`+Object.keys(by).map(k=>`<div class="pbar"><div class="row"><span>${platName(k)}${/Facebook|^FB/.test(platName(k))||/^FB/.test(k)?' · '+k.replace('FB ',''):''}</span><span class="num">${money(by[k].s)} de ${money(by[k].t)}</span></div><div class="track"><i style="width:${by[k].t?Math.round(100*by[k].s/by[k].t):0}%"></i></div></div>`).join('')+`</div></section>`;
   const plats=['all','Instagram','TikTok','Facebook','Google'];
-  h+=`<section class="sec"><h2>Todas las campañas</h2><div class="fchips">`+plats.map(p=>`<button data-plat="${p}" aria-pressed="${S.plat===p}">${p==='all'?'Todas':p}</button>`).join('')+`</div><div class="group">`;
+  h+=`<section class="sec"><h2>Campañas del plan</h2><div class="fchips">`+plats.map(p=>`<button data-plat="${p}" aria-pressed="${S.plat===p}">${p==='all'?'Todas':p}</button>`).join('')+`</div><div class="group">`;
   const list=CAMPS.map((c,i)=>({c,i})).filter(({c})=>tagOK(campTag(c))&&(S.plat==='all'||(S.plat==='Facebook'?/^FB|Remarketing/.test(c.platform):S.plat==='Google'?/Google/.test(c.platform):c.platform===S.plat)));
   if(!list.length) h+=`<div class="empty-s">No hay campañas para este filtro.</div>`;
   list.forEach(({c})=>{
@@ -210,7 +219,7 @@ function renderAds(){
     const st = a[d-1]>0?`<span class="act on">Hoy ${money(a[d-1])}</span>`: d<first?`<span class="act run">Inicia el ${first}</span>`: d>last?`<span class="act off">Terminó</span>`:`<span class="act run">Pausa hoy</span>`;
     h+=`<details class="ad"><summary><span class="dot ${platCls(c.platform)}"></span><span class="a-name">${esc(c.name)}</span>${st}</summary>${adDetails(c)}<div class="strip" aria-hidden="true">${a.map((x,i)=>`<i class="${x?'a':''} ${i+1===d?'t':''}"></i>`).join('')}</div><p class="note" style="padding:4px 0 0">Días activos en octubre. Contorno = día seleccionado.</p></details>`;
   });
-  return h+`</div></section>`;
+  return REALH+h+`</div></section>`;
 }
 
 function renderGuia(){

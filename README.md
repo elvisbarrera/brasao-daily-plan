@@ -7,3 +7,6 @@ Single-page iOS-style app that tells the Brasão team what to do each day in Oct
 - `src/head.html`, `src/body.html`, `src/app.js`: app source. Build = head + body + `const DATA=<data.json>` + app.js.
 
 Ad amounts come from the planning sheet, not live platform spend.
+
+## Daily spend update
+`src/actuals.json` holds real spend (Meta + TikTok since Oct 1). A daily scheduled task refreshes it, runs `python3 src/build.py` (writes `index.html`) and pushes to `main`; Netlify redeploys.

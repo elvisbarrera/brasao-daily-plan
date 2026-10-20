@@ -73,6 +73,28 @@ main{padding-top:14px;display:flex;flex-direction:column;gap:22px}
 .hero b{font-weight:700}
 .hero small{display:block;color:var(--fg2);font-size:13px;margin-top:4px}
 
+
+/* now card */
+.now{background:var(--surface);border-radius:16px;padding:14px 14px 10px;position:relative;box-shadow:0 0 0 1.5px var(--accent),0 10px 30px var(--glow)}
+.now-h{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--fg2);font-weight:600}
+.live{display:inline-flex;align-items:center;gap:7px;color:var(--accent);font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 0 var(--bad);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,80,80,.55)}70%{box-shadow:0 0 0 8px rgba(255,80,80,0)}100%{box-shadow:0 0 0 0 rgba(255,80,80,0)}}
+.now-lead{margin:10px 0 4px;font-size:16px;font-weight:500}
+.now-i{display:flex;gap:12px;padding:10px 0;align-items:flex-start}
+.now-i+.now-i{border-top:1px solid var(--line)}
+.now-i.done .now-b{opacity:.45}
+.now-b{flex:1;min-width:0}
+.now-top{display:flex;gap:8px;align-items:center}
+.late{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:6px;background:var(--bad-soft);color:var(--bad)}
+.now-t{font-weight:700;font-size:17px;line-height:1.3;margin-top:2px;overflow-wrap:anywhere}
+.now-w{font-size:13px;color:var(--fg2);margin-top:3px;overflow-wrap:anywhere}
+.now-more{font-size:13px;color:var(--fg2);padding:2px 0 6px}
+.now-next{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.now-next small{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg3)}
+.now-ads{margin-top:8px;width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:14px;text-align:left}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
+
 /* tasks */
 .task{display:flex;gap:12px;padding:12px 14px;align-items:flex-start}
 .task.done .t-main{opacity:.45}
@@ -314,6 +336,39 @@ function adDetails(c){
   return `<dl class="dl">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>`;
 }
 
+
+/* "Ahora": live coach synced to Chicago time */
+function fmtMin(m){ const h=Math.floor(m/60)%24, mm=m%60; return `${h%12||12}:${String(mm).padStart(2,'0')} ${h<12?'AM':'PM'}` }
+function inMin(n){ if(n<60) return `${n} min`; const h=Math.floor(n/60), m=n%60; return m?`${h} h ${m} min`:`${h} h` }
+function nowItem(t,late){
+  const x=t.x; let title,what;
+  if(t.kind==='feed'){ title=`Publica el ${/Reel/.test(x.format)?'Reel':'post'}: ${x.theme||x.topic}`; what=`${x.format} · ${whereFeed(x.platform).join(' + ')}${x.loc?' · '+x.loc:''}` }
+  else if(t.kind==='story'){ title=`Sube la story: ${x.topic}`; what=`${x.format} · ${x.loc||''}${x.overlay?' · Texto: '+x.overlay:''}` }
+  else { title=`Envía el email: ${x.subject||''}`; what=x.send||'' }
+  return `<div class="now-i" data-row="${t.id}">${chk(t.id)}<div class="now-b"><div class="now-top"><span class="time">${esc(x.time||fmtMin(t.t))}</span>${late?'<span class="late">Atrasado</span>':''}</div><p class="now-t">${esc(title)}</p><p class="now-w">${esc(what)}</p></div></div>`;
+}
+function renderNow(){
+  if(!(inMonth && S.day===TODAY)) return '';
+  const nm=chicagoNow().min, tasks=dayTasks(TODAY).filter(t=>!done[t.id]);
+  const due=tasks.filter(t=>t.t<=nm), next=tasks.filter(t=>t.t>nm);
+  const adsLeft=adTasks(TODAY).filter(t=>!done[t.id]).length;
+  let h=`<section class="now" id="nowcard"><div class="now-h"><span class="live"><i></i>Ahora</span><span class="num">${fmtMin(nm)} · Chicago</span></div>`;
+  if(due.length){
+    h+=`<p class="now-lead">${due.length===1?'Te toca hacer esto ahora:':`Tienes ${due.length} cosas pendientes ahora. Empieza por la más reciente:`}</p>`;
+    h+=due.slice(-3).reverse().map((t,i)=>nowItem(t,nm-t.t>30)).join('');
+    if(due.length>3) h+=`<p class="now-more">+ ${due.length-3} más atrasadas abajo en la lista.</p>`;
+  } else if(next.length){
+    h+=`<p class="now-lead">Estás al día. Lo siguiente es en <b>${inMin(next[0].t-nm)}</b>:</p>`;
+  } else {
+    h+=`<p class="now-lead"><b>Listo por hoy.</b> Ya hiciste todo lo programado.</p>`;
+  }
+  if(next.length){ h+=`<div class="now-next"><small>${due.length?`Después, en ${inMin(next[0].t-nm)}`:'Siguiente'}</small>${nowItem(next[0],false)}</div>` }
+  if(adsLeft) h+=`<button class="now-ads" data-tab="ads">${adsLeft} ${adsLeft===1?'cambio':'cambios'} de anuncios pendientes hoy <span>›</span></button>`;
+  return h+`</section>`;
+}
+function refreshNow(){ const el=document.getElementById('nowcard'); if(el) el.outerHTML=renderNow() }
+setInterval(refreshNow,30000);
+
 function renderHoy(){
   const d=S.day, day=D[d], tasks=dayTasks(d), ads=visibleAds(d), pr=progress(d);
   const feed=tasks.find(t=>t.kind==='feed'), nStories=tasks.filter(t=>t.kind==='story').length;
@@ -327,6 +382,7 @@ function renderHoy(){
   const intro = parts.length?`Hoy te toca: ${parts.join(', ').replace(/, ([^,]*)$/,' y $1')}.`:'Hoy no hay tareas para esta selección.';
   const evs = day.events.filter(e=>S.loc==='all'||evTags(e.market).some(tagOK));
   let h='';
+  h+=renderNow();
   h+=`<div class="hero"><div class="ring" style="--p:${pr.pct}"><i class="num">${pr.pct}%</i></div><div><p id="intro">${intro}</p><small class="num" id="prog">${pr.n} de ${pr.total} hechas · anuncios del día ${money(spend)}</small></div></div>`;
   if(!inMonth && d===TODAY) h+=`<p class="note">El plan cubre del 1 al 31 de octubre de 2026. Estás viendo el ${d===1?'primer':'último'} día.</p>`;
 
@@ -484,7 +540,7 @@ function updateProgress(){
 document.addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.k){ const k=b.dataset.k; done[k]=!done[k]; if(!done[k]) delete done[k]; saveDone();
-    b.setAttribute('aria-pressed',!!done[k]); const row=b.closest('[data-row]'); if(row) row.classList.toggle('done',!!done[k]); updateProgress(); return }
+    document.querySelectorAll(`[data-k="${k}"]`).forEach(x=>{x.setAttribute('aria-pressed',!!done[k]); const row=x.closest('[data-row]'); if(row) row.classList.toggle('done',!!done[k])}); updateProgress(); if(!b.closest('#nowcard')) refreshNow(); else setTimeout(refreshNow,600); return }
   if(b.dataset.c!==undefined){ copyText(CLIPS[+b.dataset.c]); return }
   if(b.dataset.tab){ S.tab=b.dataset.tab; render(); scrollTo(0,0); return }
   if(b.dataset.loc){ S.loc=b.dataset.loc; store.set('loc',S.loc); const y=scrollY; render(); scrollTo(0,y); return }

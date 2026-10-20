@@ -96,6 +96,39 @@ function adDetails(c){
   return `<dl class="dl">${rows.map(r=>`<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>`;
 }
 
+
+/* "Ahora": live coach synced to Chicago time */
+function fmtMin(m){ const h=Math.floor(m/60)%24, mm=m%60; return `${h%12||12}:${String(mm).padStart(2,'0')} ${h<12?'AM':'PM'}` }
+function inMin(n){ if(n<60) return `${n} min`; const h=Math.floor(n/60), m=n%60; return m?`${h} h ${m} min`:`${h} h` }
+function nowItem(t,late){
+  const x=t.x; let title,what;
+  if(t.kind==='feed'){ title=`Publica el ${/Reel/.test(x.format)?'Reel':'post'}: ${x.theme||x.topic}`; what=`${x.format} · ${whereFeed(x.platform).join(' + ')}${x.loc?' · '+x.loc:''}` }
+  else if(t.kind==='story'){ title=`Sube la story: ${x.topic}`; what=`${x.format} · ${x.loc||''}${x.overlay?' · Texto: '+x.overlay:''}` }
+  else { title=`Envía el email: ${x.subject||''}`; what=x.send||'' }
+  return `<div class="now-i" data-row="${t.id}">${chk(t.id)}<div class="now-b"><div class="now-top"><span class="time">${esc(x.time||fmtMin(t.t))}</span>${late?'<span class="late">Atrasado</span>':''}</div><p class="now-t">${esc(title)}</p><p class="now-w">${esc(what)}</p></div></div>`;
+}
+function renderNow(){
+  if(!(inMonth && S.day===TODAY)) return '';
+  const nm=chicagoNow().min, tasks=dayTasks(TODAY).filter(t=>!done[t.id]);
+  const due=tasks.filter(t=>t.t<=nm), next=tasks.filter(t=>t.t>nm);
+  const adsLeft=adTasks(TODAY).filter(t=>!done[t.id]).length;
+  let h=`<section class="now" id="nowcard"><div class="now-h"><span class="live"><i></i>Ahora</span><span class="num">${fmtMin(nm)} · Chicago</span></div>`;
+  if(due.length){
+    h+=`<p class="now-lead">${due.length===1?'Te toca hacer esto ahora:':`Tienes ${due.length} cosas pendientes ahora. Empieza por la más reciente:`}</p>`;
+    h+=due.slice(-3).reverse().map((t,i)=>nowItem(t,nm-t.t>30)).join('');
+    if(due.length>3) h+=`<p class="now-more">+ ${due.length-3} más atrasadas abajo en la lista.</p>`;
+  } else if(next.length){
+    h+=`<p class="now-lead">Estás al día. Lo siguiente es en <b>${inMin(next[0].t-nm)}</b>:</p>`;
+  } else {
+    h+=`<p class="now-lead"><b>Listo por hoy.</b> Ya hiciste todo lo programado.</p>`;
+  }
+  if(next.length){ h+=`<div class="now-next"><small>${due.length?`Después, en ${inMin(next[0].t-nm)}`:'Siguiente'}</small>${nowItem(next[0],false)}</div>` }
+  if(adsLeft) h+=`<button class="now-ads" data-tab="ads">${adsLeft} ${adsLeft===1?'cambio':'cambios'} de anuncios pendientes hoy <span>›</span></button>`;
+  return h+`</section>`;
+}
+function refreshNow(){ const el=document.getElementById('nowcard'); if(el) el.outerHTML=renderNow() }
+setInterval(refreshNow,30000);
+
 function renderHoy(){
   const d=S.day, day=D[d], tasks=dayTasks(d), ads=visibleAds(d), pr=progress(d);
   const feed=tasks.find(t=>t.kind==='feed'), nStories=tasks.filter(t=>t.kind==='story').length;
@@ -109,6 +142,7 @@ function renderHoy(){
   const intro = parts.length?`Hoy te toca: ${parts.join(', ').replace(/, ([^,]*)$/,' y $1')}.`:'Hoy no hay tareas para esta selección.';
   const evs = day.events.filter(e=>S.loc==='all'||evTags(e.market).some(tagOK));
   let h='';
+  h+=renderNow();
   h+=`<div class="hero"><div class="ring" style="--p:${pr.pct}"><i class="num">${pr.pct}%</i></div><div><p id="intro">${intro}</p><small class="num" id="prog">${pr.n} de ${pr.total} hechas · anuncios del día ${money(spend)}</small></div></div>`;
   if(!inMonth && d===TODAY) h+=`<p class="note">El plan cubre del 1 al 31 de octubre de 2026. Estás viendo el ${d===1?'primer':'último'} día.</p>`;
 
@@ -266,7 +300,7 @@ function updateProgress(){
 document.addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.k){ const k=b.dataset.k; done[k]=!done[k]; if(!done[k]) delete done[k]; saveDone();
-    b.setAttribute('aria-pressed',!!done[k]); const row=b.closest('[data-row]'); if(row) row.classList.toggle('done',!!done[k]); updateProgress(); return }
+    document.querySelectorAll(`[data-k="${k}"]`).forEach(x=>{x.setAttribute('aria-pressed',!!done[k]); const row=x.closest('[data-row]'); if(row) row.classList.toggle('done',!!done[k])}); updateProgress(); if(!b.closest('#nowcard')) refreshNow(); else setTimeout(refreshNow,600); return }
   if(b.dataset.c!==undefined){ copyText(CLIPS[+b.dataset.c]); return }
   if(b.dataset.tab){ S.tab=b.dataset.tab; render(); scrollTo(0,0); return }
   if(b.dataset.loc){ S.loc=b.dataset.loc; store.set('loc',S.loc); const y=scrollY; render(); scrollTo(0,y); return }

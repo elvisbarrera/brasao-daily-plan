@@ -12,7 +12,7 @@ Ad amounts come from the planning sheet, not live platform spend.
 `src/actuals.json` holds real spend (Meta + TikTok since Oct 1). A daily scheduled task refreshes it, runs `python3 src/build.py` (writes `index.html`) and pushes to `main`; Netlify redeploys.
 
 ## Fuente de datos
-Todo el plan viene del Google Sheet (Brasao_October_2026_FULL_PROGRAM). `src/parse.py` lo convierte a `src/data.json`.
+Todo el plan viene del Google Sheet (Brasao_October_2026_FULL_PROGRAM). Para actualizar: descarga el Sheet como .xlsx (Drive), corre `python3 src/sync_from_sheet.py archivo.xlsx`, luego `python3 src/parse.py src/sheet_export.txt` y `python3 src/build.py`.
 
 ## Links de stories
-`storyLink()` y `fixOverlay()` en `src/app.js` deciden, con el tema, formato y sucursal que trae el Sheet, si cada story lleva sticker de link, cuál y con qué texto (con UTM). La pestaña Guía explica las reglas.
+`storyLink()` en `src/app.js` deciden, con el tema, formato y sucursal que trae el Sheet, si cada story lleva sticker de link, cuál y con qué texto (con UTM). La pestaña Guía explica las reglas.

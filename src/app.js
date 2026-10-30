@@ -88,20 +88,12 @@ function storyLink(s){
   else if(/Irving/i.test(L)){ url=OTAB.irving; where='Va directo a la reserva de Irving.' }
   return yes('Reserve a table',url,'Es una story para venir hoy o pronto. '+where);
 }
-/* Horas de "Open Today" según el día (brasaousa.com). El Sheet trae las mismas horas todos los días. */
-function fixOverlay(s,d){
-  if(!/Open Today/i.test(s.topic||'')) return s.overlay;
-  const w=dow(d);
-  const h = w===0 ? 'Open Today · 12–8PM' : w===6 ? 'Open Today · Dinner 2–10PM' : w===5 ? 'Open Today · Lunch 11–2 · Dinner 5–10' : 'Open Today · Lunch 11–2 · Dinner 5–9:30';
-  return `'${h}' + location tags`;
-}
-
 /* ---------- views ---------- */
 function visibleAds(d){ return D[d].ads.filter(a=>tagOK(campTag(CAMPS[a.i]))) }
 function dayTasks(d){
   const day=D[d], list=[];
   if(day.feed) list.push({id:`${d}:feed`,t:mins(day.feed.time),kind:'feed',x:day.feed});
-  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${d}:s${i}`,t:mins(s.time),kind:'story',x:Object.assign({},s,{d,overlay:fixOverlay(s,d)})}) });
+  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${d}:s${i}`,t:mins(s.time),kind:'story',x:s}) });
   if(day.email){ const m=day.email.send.match(/(\d+(?::\d+)?\s*[AP]M)/i); list.push({id:`${d}:email`,t:m?mins(m[1]):600,kind:'email',x:day.email}) }
   list.sort((a,b)=>a.t-b.t);
   return list;

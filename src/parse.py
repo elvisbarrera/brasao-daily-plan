@@ -1,5 +1,6 @@
 import csv, io, re, json
-src = open('/root/.claude/uploads/e3b98cff-325b-5823-aa7c-44b813f7d378/b37a0eee-Brasao_October_2026_FULL_PROGRAM', encoding='utf-8').read()
+import sys
+src = open(sys.argv[1] if len(sys.argv)>1 else 'sheet_export.txt', encoding='utf-8').read()
 secs = {}
 for part in src.split('## Sheet name: ')[1:]:
     name, _, body = part.partition('\n')
@@ -106,7 +107,7 @@ budget=[]
 for r in rows(key('Spend Tracker')):
     pass
 out={'days':days,'camps':camps,'guard':guard,'moves':moves,'fixes':fixes,'score':score,'thr':thr}
-json.dump(out,open('data.json','w'),ensure_ascii=False,separators=(',',':'))
+json.dump(out,open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'data.json'),'w'),ensure_ascii=False,separators=(',',':'))
 print({d:(1 if days[d]['feed'] else 0,len(days[d]['stories']),len(days[d]['ads']),len(days[d]['events']), bool(days[d]['email'])) for d in (1,16,20,21,31)})
 print(len(guard),len(moves),len(fixes),len(score),len(thr))
 tot=[sum(c['amt'][d] for c in camps) for d in range(31)]

@@ -221,6 +221,14 @@ td.g{color:var(--ok);font-weight:600} td.y{color:var(--warn);font-weight:600} td
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media (max-width:400px){.large{font-size:28px}.seg button{font-size:12px}.dl{grid-template-columns:80px 1fr}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.lnk{margin:8px 0 2px;padding:10px 12px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--line)}
+.lnk-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lnk-h b{font-size:15px;color:var(--fg);flex:1;min-width:0}
+.chip.lk{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.lnk-u{margin:6px 0 0;font-size:12.5px;color:var(--fg2);overflow-wrap:anywhere}
+.lnk-w{margin:4px 0 0;font-size:13px;color:var(--fg2)}
+.lnk-no{color:var(--fg2)}
 </style>
 <script>document.documentElement.dataset.theme='light'</script>
 <div class="wrap">
@@ -304,12 +312,44 @@ async function copyText(txt){
   let ok=false; try{ ok=document.execCommand('copy') }catch(e){} ta.remove(); toast(ok?'Copiado':'Mantén presionado el texto para copiar');
 }
 
+/* ---------- links de stories ---------- */
+const SITE='https://www.brasaousa.com';
+const OTAB={sa:'https://www.opentable.com/booking/restref/availability?restRef=262078&partySize=2',plano:'https://www.opentable.com/booking/restref/availability?restRef=1114516&partySize=2',irving:'https://www.opentable.com/booking/restref/availability?restRef=1254919&partySize=2'};
+const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+function siteUrl(path,topic){ const [p,h]=path.split('#'); return SITE+p+'?utm_source=instagram&utm_medium=organic&utm_campaign=october_2026&utm_content=story_'+slug(topic)+(h?'#'+h:'') }
+/* Qué link lleva cada story. Se calcula con el tema, el formato y la sucursal que vienen del Google Sheet. */
+function storyLink(s){
+  const t=s.topic||'', f=s.format||'', L=s.loc||'';
+  const yes=(label,url,why)=>({use:true,label,url,why});
+  const no=why=>({use:false,why});
+  if(/December|Private|Holiday Party/i.test(t)) return yes('Plan your event',siteUrl('/private-events',t),'Eventos privados de diciembre. El link va a la página de eventos.');
+  if(/Poll|Countdown/.test(f)) return no(`El sticker de ${/Poll/.test(f)?'encuesta':'cuenta regresiva'} ya es la interacción de esta story.`);
+  if(/Thank You|Happy Halloween|Bar Energy|Night Carve|Saturday Sizzle|Sunday Family/i.test(t)) return no('Es ambiente, no pide una acción.');
+  if(/Happy Hour/i.test(t)) return yes('Happy Hour menu',siteUrl('/happy-hour',t),'Happy Hour en el bar. El link va al menú.');
+  if(/Executive Lunch/i.test(t)) return yes('Executive Lunch',siteUrl('/executive-lunch',t),'Almuerzo de lunes a viernes. El link va a la página del Executive Lunch.');
+  if(/Dessert/i.test(t)) return yes('Drinks & desserts',siteUrl('/drink-menu',t),'Postres y bebidas. El link va al menú de bebidas y postres.');
+  if(/Video/.test(f) && !/Prime Rib|Wagyu|Caipirinha|Reserve/i.test(t)) return no('Video de ambiente, no pide una acción.');
+  /* todo lo demás: reservar */
+  let url=siteUrl('/#reserve',t), where='Elige sucursal en la página.';
+  if(/SA ONLY/i.test(L)){ url=OTAB.sa; where='Va directo a la reserva de San Antonio.' }
+  else if(/Plano/i.test(L)){ url=OTAB.plano; where='Va directo a la reserva de Plano.' }
+  else if(/Irving/i.test(L)){ url=OTAB.irving; where='Va directo a la reserva de Irving.' }
+  return yes('Reserve a table',url,'Es una story para venir hoy o pronto. '+where);
+}
+/* Horas de "Open Today" según el día (brasaousa.com). El Sheet trae las mismas horas todos los días. */
+function fixOverlay(s,d){
+  if(!/Open Today/i.test(s.topic||'')) return s.overlay;
+  const w=dow(d);
+  const h = w===0 ? 'Open Today · 12–8PM' : w===6 ? 'Open Today · Dinner 2–10PM' : w===5 ? 'Open Today · Lunch 11–2 · Dinner 5–10' : 'Open Today · Lunch 11–2 · Dinner 5–9:30';
+  return `'${h}' + location tags`;
+}
+
 /* ---------- views ---------- */
 function visibleAds(d){ return D[d].ads.filter(a=>tagOK(campTag(CAMPS[a.i]))) }
 function dayTasks(d){
   const day=D[d], list=[];
   if(day.feed) list.push({id:`${d}:feed`,t:mins(day.feed.time),kind:'feed',x:day.feed});
-  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${d}:s${i}`,t:mins(s.time),kind:'story',x:s}) });
+  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${d}:s${i}`,t:mins(s.time),kind:'story',x:Object.assign({},s,{d,overlay:fixOverlay(s,d)})}) });
   if(day.email){ const m=day.email.send.match(/(\d+(?::\d+)?\s*[AP]M)/i); list.push({id:`${d}:email`,t:m?mins(m[1]):600,kind:'email',x:day.email}) }
   list.sort((a,b)=>a.t-b.t);
   return list;
@@ -330,6 +370,12 @@ function progress(d){
 }
 function chk(id){ return `<button class="chk" data-k="${id}" aria-pressed="${!!done[id]}" aria-label="Marcar como hecho"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg></button>` }
 
+function linkBlock(s){
+  const l=storyLink(s);
+  if(!l.use) return `<p class="t-vis lnk-no"><b>Sin link.</b> ${esc(l.why)}</p>`;
+  return `<div class="lnk"><div class="lnk-h"><span class="chip lk">Sticker de link</span><b>${esc(l.label)}</b><button class="copy" data-c="${clip(l.url)}">Copiar link</button></div><p class="lnk-u">${esc(l.url.replace(/^https:\/\/(www\.)?/,''))}</p><p class="lnk-w">${esc(l.why)}</p></div>`;
+}
+
 function adDetails(c){
   const i=c.info||{};
   const rows=[['Objetivo',i.objective],['Audiencia',i.audience],['Qué mostrar',i.creative],['Formato',i.format],['Botón (CTA)',i.cta],['Duración',i.flights],['Total',c.total]].filter(r=>r[1]);
@@ -343,7 +389,7 @@ function inMin(n){ if(n<60) return `${n} min`; const h=Math.floor(n/60), m=n%60;
 function nowItem(t,late){
   const x=t.x; let title,what;
   if(t.kind==='feed'){ title=`Publica el ${/Reel/.test(x.format)?'Reel':'post'}: ${x.theme||x.topic}`; what=`${x.format} · ${whereFeed(x.platform).join(' + ')}${x.loc?' · '+x.loc:''}` }
-  else if(t.kind==='story'){ title=`Sube la story: ${x.topic}`; what=`${x.format} · ${x.loc||''}${x.overlay?' · Texto: '+x.overlay:''}` }
+  else if(t.kind==='story'){ const lk=storyLink(x); title=`Sube la story: ${x.topic}`; what=`${x.format} · ${x.loc||''}${x.overlay?' · Texto: '+x.overlay:''}${lk.use?' · Sticker de link: '+lk.label:' · Sin link'}` }
   else { title=`Envía el email: ${x.subject||''}`; what=x.send||'' }
   return `<div class="now-i" data-row="${t.id}">${chk(t.id)}<div class="now-b"><div class="now-top"><span class="time">${esc(x.time||fmtMin(t.t))}</span>${late?'<span class="late">Atrasado</span>':''}</div><p class="now-t">${esc(title)}</p><p class="now-w">${esc(what)}</p></div></div>`;
 }
@@ -429,6 +475,7 @@ function renderHoy(){
         const s=t.x, acc=accounts(tag(s.loc));
         html+=`<div class="task ${done[t.id]?'done':''}" data-row="${t.id}">${chk(t.id)}<div class="t-body"><div class="t-top"><span class="time">${s.time}</span><span class="t-title t-main">${esc(s.slot.replace('STORY','Story'))} · ${esc(s.topic)}</span>${nextChip}</div>
           <p class="t-text t-main">${esc(s.overlay)}</p><p class="t-vis t-main"><b>Foto o video:</b> ${esc(s.visual)}</p>
+          ${linkBlock(s)}
           <div class="t-meta"><span class="chip">${fmtEs(s.format)}</span><span class="chip ig">Instagram Story</span><span class="chip fb">también a Facebook</span><span class="chip loc">${acc.join(' · ')}</span></div></div></div>`;
       } else {
         const e=t.x, mm=e.body, id=clip(`${e.subject}\n\n${e.body}`);
@@ -503,6 +550,11 @@ function renderGuia(){
   h+=`<section class="sec"><h2>Alertas de rendimiento <span>revisa cada lunes</span></h2><div class="group scroll-x"><table class="thr"><thead><tr><th>Dónde</th><th>Métrica</th><th>Bien</th><th>Vigila</th><th>Pausa</th></tr></thead><tbody>`+DATA.thr.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="g">${esc(r[2])}</td><td class="y">${esc(r[3])}</td><td class="r">${esc(r[4])}</td></tr>`).join('')+`</tbody></table></div><p class="note">Si está en rojo: ${''}abre la fila en el Excel (columna Action if red).</p></section>`;
   h+=`<section class="sec"><h2>Metas de octubre</h2><div class="group">`+DATA.score.map(s=>`<details class="item"><summary>${esc(s[0])}</summary><p><b>Meta:</b> ${esc(s[2])}<br><b>Responsable:</b> ${esc(s[3])} · ${esc(s[4])}</p></details>`).join('')+`</div></section>`;
   h+=`<section class="sec"><h2>10 movimientos del mes</h2><div class="group">`+DATA.moves.map(m=>`<details class="item"><summary>${esc(m[0])}</summary><p>${esc(m[1])}</p></details>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Links en las stories</h2><div class="group">
+    <details class="item"><summary>Cuándo llevan link y cuándo no</summary><p><b>Sí:</b> stories que piden una acción (reservar, ver el menú, planear un evento). <b>No:</b> ambiente, behind the scenes, encuestas y cuentas regresivas. Cada story del día te dice cuál es su caso.</p></details>
+    <details class="item"><summary>Qué link va en cada tipo</summary><p>Abierto hoy, promos de la semana, Couples Night, Prime Rib, Ladies Night, Wagyu, Reserve Tonight, Weekend Reservations: reservar (brasaousa.com/#reserve).<br>Story de un solo local (San Antonio, Plano o Irving): la reserva de ese local en OpenTable.<br>Eventos privados y fiestas de diciembre: /private-events.<br>Executive Lunch: /executive-lunch.<br>Happy Hour: /happy-hour.<br>Postres y bebidas: /drink-menu.<br>Ambiente, behind the scenes y reseñas: sin link.</p></details>
+    <details class="item"><summary>Cómo ponerlo</summary><p>Un solo sticker de link por story. Con texto corto, como "Reserve a table", en vez del link a la vista. Colócalo en la parte de abajo, debajo de brasaousa.com. El link ya trae UTM (instagram, organic, october_2026), así que lo ves en Analytics. En Facebook revisa si te deja poner el link antes de contar con él.</p></details>
+  </div></section>`;
   h+=`<section class="sec"><h2>Hábitos de septiembre</h2><div class="group">`+DATA.fixes.map(m=>`<details class="item"><summary>${esc(m[0])}</summary><p>${esc(m[1])}</p></details>`).join('')+`</div></section>`;
   return h;
 }

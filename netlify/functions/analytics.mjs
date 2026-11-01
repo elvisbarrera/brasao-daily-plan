@@ -86,6 +86,8 @@ export function ranges(y, m, today) {
     cur: { startDate: iso(y, m, 1), endDate: iso(y, m, through) },
     prev: { startDate: iso(py, pm, 1), endDate: iso(py, pm, current ? Math.min(through, pnd) : pnd) },
     prevMonth: pm,
+    /* la gráfica diaria muestra el mes anterior completo como referencia */
+    prevFull: { startDate: iso(py, pm, 1), endDate: iso(py, pm, pnd) },
   };
 }
 
@@ -165,7 +167,7 @@ function requestsFor(R) {
   const two = [R.cur, R.prev];
   return [
     { dateRanges: two, metrics: ["sessions", "totalUsers", "newUsers", "engagedSessions", RES, "screenPageViews"].map((name) => ({ name })) },
-    { dateRanges: two, dimensions: [{ name: "date" }], metrics: [{ name: "sessions" }, { name: RES }], limit: 100 },
+    { dateRanges: [R.cur, R.prevFull], dimensions: [{ name: "date" }], metrics: [{ name: "sessions" }, { name: RES }], limit: 100 },
     { dateRanges: two, dimensions: [{ name: "sessionDefaultChannelGroup" }], metrics: [{ name: "sessions" }, { name: RES }], limit: 50 },
     { dateRanges: two, dimensions: [{ name: "sessionSourceMedium" }], metrics: [{ name: "sessions" }, { name: RES }], orderBys: [{ metric: { metricName: "sessions" }, desc: true }], limit: 40 },
     { dateRanges: two, dimensions: [{ name: "eventName" }], metrics: [{ name: "eventCount" }],

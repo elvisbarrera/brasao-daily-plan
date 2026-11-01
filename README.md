@@ -23,3 +23,8 @@ Arriba hay un selector de mes. Cada mes tiene sus propios archivos:
 - Noviembre: `src/data_nov.json`, `src/actuals_nov.json`, `src/budget_nov.json` (Sheet 1wLz3iSXEpbXvY3AMdletFHkFzjArp3Z1IguO_tKmg4s, Brasao_November_2026_FULL_PROGRAM)
 
 `parse.py` detecta el mes solo: `python3 src/parse.py export_noviembre.txt data_nov.json`. Para agregar otro mes, añádelo a `MONTHS` en `src/build.py`.
+
+## Analíticos (Google Analytics en vivo)
+La pestaña Analíticos llama a `/api/analytics?m=<mes>` (función de Netlify en `netlify/functions/analytics.mjs`).
+La función lee GA4 (propiedad 340318548, www.brasaousa.com) con una cuenta de servicio de solo lectura y compara 1 → hoy contra los mismos días del mes anterior. Cache de 10 min.
+Variables de entorno en Netlify (alcance Functions): `GA_CLIENT_EMAIL`, `GA_PRIVATE_KEY` (y opcional `GA_PROPERTY_ID`).

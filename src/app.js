@@ -322,20 +322,117 @@ function renderGuia(){
   return h;
 }
 
+
+/* ---------- Analíticos (Google Analytics 4 en vivo, vía /api/analytics) ---------- */
+const AN = {};            /* por mes: {st:'loading'|'ok'|'err', d, at} */
+const ANS = { metric:'sessions' };
+const pctCh = (c,p) => p>0 ? (c-p)/p : (c>0 ? null : 0);
+function chg(c,p){
+  const r=pctCh(c,p);
+  if(r===null) return `<span class="chg up">nuevo</span>`;
+  if(Math.abs(r)<0.005) return `<span class="chg flat">= igual</span>`;
+  return `<span class="chg ${r>0?'up':'down'}">${r>0?'▲':'▼'} ${Math.abs(Math.round(r*100))}%</span>`;
+}
+const num = n => Math.round(n).toLocaleString('en-US');
+function loadAN(m, force){
+  if(AN[m] && !force && (AN[m].st==='loading' || (AN[m].st==='ok' && Date.now()-AN[m].at<10*60*1000))) return;
+  AN[m]={st:'loading'};
+  fetch(`/api/analytics?y=2026&m=${m}${force?'&t='+Date.now():''}`,{cache:'no-store'})
+    .then(r=>r.json().catch(()=>({ok:false,code:'bad',error:`El servidor respondió ${r.status}.`})))
+    .then(j=>{ AN[m]= j&&j.ok ? {st:'ok',d:j,at:Date.now()} : {st:'err',d:j||{},at:Date.now()} })
+    .catch(()=>{ AN[m]={st:'err',d:{code:'net',error:'No hay conexión con el servidor de la app.'},at:Date.now()} })
+    .finally(()=>{ if(S.tab==='analytics' && MNUM===m){ const y=scrollY; render(); scrollTo(0,y) } });
+}
+function renderAnalytics(){
+  const st=AN[MNUM];
+  if(!st || st.st==='loading'){ if(!st) loadAN(MNUM); return `<section class="sec"><div class="group"><div class="empty-s">Cargando Google Analytics…</div></div></section>` }
+  if(st.st==='err'){
+    const e=st.d||{};
+    if(e.code==='setup') return `<section class="sec"><h2>Google Analytics</h2><div class="group"><div class="item"><p><b>Falta conectar Google Analytics.</b></p><p style="margin-top:6px;color:var(--fg2)">La app ya está lista. Solo falta poner en Netlify la llave de solo lectura de la cuenta de servicio (GA_CLIENT_EMAIL y GA_PRIVATE_KEY). Cuando esté, aquí aparecen los números.</p></div></div></section>`;
+    if(e.code==='future') return `<section class="sec"><div class="group"><div class="empty-s">${cap1(MES)} todavía no empieza.</div></div></section>`;
+    return `<section class="sec"><h2>Google Analytics</h2><div class="group"><div class="item"><p><b>No se pudieron leer los datos.</b></p><p style="margin-top:6px;color:var(--fg2)">${esc(e.error||'Error desconocido.')}</p><p style="margin-top:10px"><button class="copy" data-anreload="1">Intentar otra vez</button></p></div></div></section>`;
+  }
+  const d=st.d, T=d.totals, PM=MES_ES[d.prevMonth];
+  const curLbl=`1–${d.through} ${MES}`, prevLbl=`1–${d.prev.endDate.slice(8)*1} ${PM}`;
+  let h=`<p class="note">${d.current?'Este mes':'Mes completo'}: <b>${curLbl}</b> contra <b>${prevLbl}</b>.${d.current?' Hoy va incompleto: Google tarda 24 a 48 horas en juntar todo.':''}</p>`;
+  const tile=(lbl,c,p)=>`<div class="tile"><small>${lbl}</small><b class="num">${num(c)}</b><small class="num">${chg(c,p)} <span style="color:var(--fg3)">antes ${num(p)}</span></small></div>`;
+  const E=d.events;
+  h+=`<section class="sec"><h2>Resumen <span>brasaousa.com</span></h2><div class="tiles">`+
+    tile('Visitas',T.cur.sessions,T.prev.sessions)+tile('Personas',T.cur.totalUsers,T.prev.totalUsers)+tile('Clics en Reservar',E.reserve_click.cur,E.reserve_click.prev)+
+    tile('Llamadas',E.phone_click.cur,E.phone_click.prev)+tile('Cómo llegar',E.directions_click.cur,E.directions_click.prev)+tile('Clics a gift cards',d.giftCards.cur,d.giftCards.prev)+
+    `</div><p class="note">Visitas con interacción: ${Math.round(T.cur.engagementRate*100)}% (antes ${Math.round(T.prev.engagementRate*100)}%). Personas nuevas: ${num(T.cur.newUsers)}.</p></section>`;
+  /* gráfica */
+  h+=`<section class="sec"><h2>Por día</h2><div class="fchips">`+[['sessions','Visitas'],['reserves','Clics en Reservar']].map(([k,l])=>`<button data-anm="${k}" aria-pressed="${ANS.metric===k}">${l}</button>`).join('')+`</div>
+    <div class="group chartbox"><div class="legend"><span><i class="sw cur"></i>${cap1(MES)}</span><span><i class="sw prev"></i>${cap1(PM)}</span></div><div id="anchart" class="chart"></div><div id="antip" class="ctip" hidden></div></div>
+    <details class="more"><summary>Ver como tabla</summary><div class="group scroll-x" style="margin-top:8px"><table class="thr"><thead><tr><th>Día</th><th>${cap1(MES)}</th><th>${cap1(PM)}</th></tr></thead><tbody>${d.daily.cur[ANS.metric].map((v,i)=>`<tr><td>${i+1}</td><td>${i<d.through?num(v):'—'}</td><td>${i<d.daily.prev[ANS.metric].length?num(d.daily.prev[ANS.metric][i]):'—'}</td></tr>`).join('')}</tbody></table></div></details></section>`;
+  /* anuncios */
+  const paid=d.channels.filter(c=>/Paid|Cross-network|Display/i.test(c.name));
+  let ad='';
+  if(d.googleAds){ const g=d.googleAds; ad+=`<div class="pbar"><div class="row"><span>Google Ads · clics</span><span class="num">${num(g.cur.clicks)} ${chg(g.cur.clicks,g.prev.clicks)}</span></div><p class="note" style="padding:6px 0 0">Costo ${money(g.cur.cost)} (antes ${money(g.prev.cost)})${g.cur.clicks?' · '+('$'+(g.cur.cost/g.cur.clicks).toFixed(2))+' por clic':''}.</p></div>`; }
+  ad+=paid.map(c=>`<div class="pbar"><div class="row"><span>${esc(chName(c.name))} · visitas</span><span class="num">${num(c.cur.sessions)} ${chg(c.cur.sessions,c.prev.sessions)}</span></div><p class="note" style="padding:6px 0 0">${num(c.cur.reserves)} clics en Reservar (antes ${num(c.prev.reserves)}).</p></div>`).join('');
+  if(ACTUALS&&ACTUALS.platforms&&ACTUALS.platforms.length&&ACTUALS.through===d.through&&E.reserve_click.cur){
+    const real=ACTUALS.platforms.reduce((s,p)=>s+(p.spent||0),0);
+    ad+=`<div class="pbar"><div class="row"><span>Gasto real ÷ clics en Reservar</span><span class="num">$${(real/E.reserve_click.cur).toFixed(2)}</span></div><p class="note" style="padding:6px 0 0">${money(real)} gastados (Meta, TikTok y Google, ${esc(ACTUALS.updated)}) entre ${num(E.reserve_click.cur)} clics en Reservar de todas las fuentes.</p></div>`;
+  }
+  if(ad) h+=`<section class="sec"><h2>Anuncios en el sitio</h2><div class="group">${ad}</div><p class="note">Visitas que llegaron desde anuncios, según Google Analytics. No coinciden exacto con los clics de Meta o TikTok: algunas personas cierran antes de que cargue la página.</p></section>`;
+  /* canales */
+  const maxC=Math.max(1,...d.channels.map(c=>c.cur.sessions));
+  h+=`<section class="sec"><h2>De dónde llegan <span>visitas</span></h2><div class="group">`+d.channels.filter(c=>c.cur.sessions||c.prev.sessions).map(c=>`<div class="pbar"><div class="row"><span>${esc(chName(c.name))}</span><span class="num">${num(c.cur.sessions)} ${chg(c.cur.sessions,c.prev.sessions)}</span></div><div class="track"><i style="width:${Math.round(100*c.cur.sessions/maxC)}%"></i></div></div>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Fuentes principales</h2><div class="group">`+d.sources.filter(c=>c.cur.sessions).map(c=>`<div class="pbar"><div class="row"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><span class="num">${num(c.cur.sessions)} ${chg(c.cur.sessions,c.prev.sessions)}</span></div><p class="note" style="padding:4px 0 0">${num(c.cur.reserves)} clics en Reservar</p></div>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Ciudades</h2><div class="group">`+d.cities.filter(c=>c.cur.sessions).map(c=>`<div class="pbar"><div class="row"><span>${esc(c.name)}</span><span class="num">${num(c.cur.sessions)} ${chg(c.cur.sessions,c.prev.sessions)}</span></div></div>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Páginas más vistas <span>${cap1(MES)}</span></h2><div class="group">`+d.pages.map(p=>`<div class="pbar"><div class="row"><span style="min-width:0;overflow-wrap:anywhere">${esc(p.name)}</span><span class="num">${num(p.value)}</span></div></div>`).join('')+`</div></section>`;
+  const age=Math.round((Date.now()-st.at)/60000);
+  h+=`<p class="note">Datos de Google Analytics (www.brasaousa.com), leídos ${age<1?'hace un momento':'hace '+age+' min'}. <button class="linkbtn" data-anreload="1">Actualizar</button></p>`;
+  return h;
+}
+const chName = n => ({'Organic Search':'Google orgánico','Paid Search':'Google pagado','Paid Social':'Redes pagadas (anuncios)','Organic Social':'Redes orgánicas','Direct':'Directo','Referral':'Otros sitios','Cross-network':'Google PMax (varias redes)','Unassigned':'Sin asignar','Email':'Email','Display':'Display','Organic Video':'Video orgánico','Paid Video':'Video pagado','Paid Other':'Otro pagado','Organic Maps':'Google Maps','Organic Shopping':'Shopping orgánico'}[n]||n);
+function drawChart(){
+  const box=document.getElementById('anchart'), st=AN[MNUM]; if(!box||!st||st.st!=='ok') return;
+  const d=st.d, k=ANS.metric, cur=d.daily.cur[k].slice(0,d.through), prev=d.daily.prev[k], N=d.ndays;
+  const W=box.clientWidth||340, H=200, L=42, Rm=8, Tm=10, B=22;
+  const max=Math.max(1,...cur,...prev); const step=niceStep(max/3); const top=Math.ceil(max/step)*step;
+  const x=i=>L+(N<=1?0:i*(W-L-Rm)/(N-1)), y=v=>Tm+(H-Tm-B)*(1-v/top);
+  const path=a=>a.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  let g='';
+  for(let v=0;v<=top+1e-9;v+=step) g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${L-6}" y="${y(v)+4}" class="ax" text-anchor="end">${num(v)}</text>`;
+  [1,8,15,22,N].forEach(dd=>{ if(dd<=N) g+=`<text x="${x(dd-1)}" y="${H-6}" class="ax" text-anchor="middle">${dd}</text>` });
+  const pv=prev.slice(0,N);
+  g+=`<path d="${path(pv)}" class="ln prev"/>`;
+  g+=`<path d="${path(cur)}" class="ln cur"/>`;
+  if(cur.length===1) g+=`<circle cx="${x(0)}" cy="${y(cur[0])}" r="4" class="dot cur"/>`;
+  g+=`<line id="anx" class="xh" y1="${Tm}" y2="${H-B}" x1="-10" x2="-10"/><circle id="anpc" r="4" class="dot prev" cx="-10" cy="-10"/><circle id="ancc" r="4" class="dot cur" cx="-10" cy="-10"/>`;
+  box.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${k==='sessions'?'Visitas':'Clics en Reservar'} por día, ${MES} contra ${MES_ES[d.prevMonth]}">${g}<rect x="${L}" y="0" width="${W-L-Rm}" height="${H}" fill="transparent" id="anhit"/></svg>`;
+  const svg=box.firstElementChild, tip=document.getElementById('antip');
+  const show=ev=>{
+    const r=svg.getBoundingClientRect(); const px=ev.clientX-r.left; const i=Math.max(0,Math.min(N-1,Math.round((px-L)/((W-L-Rm)/Math.max(1,N-1)))));
+    const cv=i<cur.length?cur[i]:null, pvv=i<pv.length?pv[i]:null;
+    const xh=svg.querySelector('#anx'); xh.setAttribute('x1',x(i)); xh.setAttribute('x2',x(i));
+    const cc=svg.querySelector('#ancc'), pc=svg.querySelector('#anpc');
+    cc.setAttribute('cx',cv==null?-10:x(i)); cc.setAttribute('cy',cv==null?-10:y(cv)); pc.setAttribute('cx',pvv==null?-10:x(i)); pc.setAttribute('cy',pvv==null?-10:y(pvv));
+    tip.hidden=false; tip.innerHTML=`<b>Día ${i+1}</b><span><i class="sw cur"></i>${cap1(MES)}: ${cv==null?'—':num(cv)}${d.current&&i===d.through-1?' (incompleto)':''}</span><span><i class="sw prev"></i>${cap1(MES_ES[d.prevMonth])}: ${pvv==null?'—':num(pvv)}</span>`;
+    const tx=Math.min(Math.max(x(i)-tip.offsetWidth/2,4),W-tip.offsetWidth-4); tip.style.left=tx+'px';
+  };
+  svg.addEventListener('pointermove',show); svg.addEventListener('pointerdown',show);
+  svg.addEventListener('pointerleave',()=>{ tip.hidden=true; svg.querySelector('#anx').setAttribute('x1',-10); svg.querySelector('#anx').setAttribute('x2',-10); ['#ancc','#anpc'].forEach(s=>svg.querySelector(s).setAttribute('cx',-10)) });
+}
+function niceStep(v){ const p=Math.pow(10,Math.floor(Math.log10(Math.max(v,1)))), n=v/p; return (n<=1?1:n<=2?2:n<=5?5:10)*p }
+addEventListener('resize',()=>{ if(S.tab==='analytics') drawChart() });
+
 /* ---------- shell ---------- */
 const ICONS={
   hoy:'<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="9"/><path d="M13 8v5l3.5 2"/></svg>',
   semana:'<svg viewBox="0 0 26 26"><rect x="4" y="5.5" width="18" height="16" rx="3"/><path d="M4 11h18M9 3.5v4M17 3.5v4"/></svg>',
   ads:'<svg viewBox="0 0 26 26"><path d="M4 20V13M10 20V7M16 20v-9M22 20V4"/></svg>',
-  guia:'<svg viewBox="0 0 26 26"><path d="M5 5.5A2.5 2.5 0 0 1 7.500 3H21v17H7.500A2.500 2.500 0 0 0 5 22.500z"/><path d="M5 5.500V22.500M10 8h7"/></svg>'};
-const TABS=[['hoy','Hoy'],['semana','Semana'],['ads','Anuncios'],['guia','Guía']];
+  guia:'<svg viewBox="0 0 26 26"><path d="M5 5.5A2.5 2.5 0 0 1 7.500 3H21v17H7.500A2.500 2.500 0 0 0 5 22.500z"/><path d="M5 5.500V22.500M10 8h7"/></svg>',
+  analytics:'<svg viewBox="0 0 26 26"><path d="M4 21h18"/><path d="M5 16l5-5 4 3 7-8"/><path d="M17 6h4v4"/></svg>'};
+const TABS=[['hoy','Hoy'],['semana','Semana'],['ads','Anuncios'],['analytics','Analíticos'],['guia','Guía']];
 function renderBar(){
   let h='';
   if(S.tab==='hoy'){
     h+=`<div class="title-row"><div><h1 class="large">${S.day===TODAY&&inMonth?'Hoy':cap1(DOW[dow(S.day)])}</h1><p class="sub">${cap1(dayLabel(S.day))}</p></div>
       <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=NDAYS?'disabled':''}>›</button></div></div>`;
   } else {
-    const t={semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
+    const t={semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],analytics:['Analíticos',`Google Analytics · ${MES} contra ${MES_ES[MNUM-1]}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
     h+=`<div class="title-row"><div><h1 class="large">${t[0]}</h1><p class="sub">${t[1]}</p></div></div>`;
   }
   if(S.tab==='hoy'||S.tab==='ads') h+=`<div class="seg" role="group" aria-label="Sucursal">`+LOCS.map(l=>`<button data-loc="${l[0]}" aria-pressed="${S.loc===l[0]}">${l[1]}</button>`).join('')+`</div>`;
@@ -348,7 +445,8 @@ function renderMonths(){
 }
 function render(){
   CLIPS=[]; renderMonths(); renderBar();
-  $('#view').innerHTML = S.tab==='hoy'?renderHoy():S.tab==='semana'?renderSemana():S.tab==='ads'?renderAds():renderGuia();
+  $('#view').innerHTML = S.tab==='hoy'?renderHoy():S.tab==='semana'?renderSemana():S.tab==='ads'?renderAds():S.tab==='analytics'?renderAnalytics():renderGuia();
+  if(S.tab==='analytics') drawChart();
   $('#tabs').innerHTML=TABS.map(t=>`<button data-tab="${t[0]}" ${S.tab===t[0]?'aria-current="page"':''}>${ICONS[t[0]]}<span>${t[1]}</span></button>`).join('');
   document.title='Plan Diario Brasão';
 }
@@ -368,6 +466,8 @@ document.addEventListener('click',e=>{
   if(b.dataset.step){ S.day=Math.min(NDAYS,Math.max(1,S.day+ +b.dataset.step)); render(); scrollTo(0,0); return }
   if(b.dataset.today){ S.day=TODAY; render(); scrollTo(0,0); return }
   if(b.dataset.go){ S.day=+b.dataset.go; S.tab='hoy'; render(); scrollTo(0,0); return }
+  if(b.dataset.anm){ ANS.metric=b.dataset.anm; const y=scrollY; render(); scrollTo(0,y); return }
+  if(b.dataset.anreload){ loadAN(MNUM,true); const y=scrollY; render(); scrollTo(0,y); return }
   if(b.dataset.plat){ S.plat=b.dataset.plat; const y=scrollY; render(); scrollTo(0,y); return }
 });
 addEventListener('scroll',()=>$('#bar').classList.toggle('scrolled',scrollY>8),{passive:true});

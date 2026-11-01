@@ -363,7 +363,7 @@ function renderAnalytics(){
     `</div>${trackNote(d)}<p class="note">Visitas con interacción: ${Math.round(T.cur.engagementRate*100)}% (antes ${Math.round(T.prev.engagementRate*100)}%). Personas nuevas: ${num(T.cur.newUsers)}.</p></section>`;
   /* gráfica */
   h+=`<section class="sec"><h2>Por día</h2><div class="fchips">`+[['sessions','Visitas'],['reserves','Clics en Reservar']].map(([k,l])=>`<button data-anm="${k}" aria-pressed="${ANS.metric===k}">${l}</button>`).join('')+`</div>
-    <div class="group chartbox"><div class="legend"><span><i class="sw cur"></i>${cap1(MES)}</span><span><i class="sw prev"></i>${cap1(PM)}</span></div><div id="anchart" class="chart"></div><div id="antip" class="ctip" hidden></div></div>
+    <div class="group chartbox"><div class="legend"><span><i class="lgs cur"></i>${cap1(MES)}</span><span><i class="lgs prev"></i>${cap1(PM)}</span></div><div id="anchart" class="chart"></div><div id="antip" class="ctip" hidden></div></div>
     <details class="more"><summary>Ver como tabla</summary><div class="group scroll-x" style="margin-top:8px"><table class="thr"><thead><tr><th>Día</th><th>${cap1(MES)}</th><th>${cap1(PM)}</th></tr></thead><tbody>${d.daily.cur[ANS.metric].map((v,i)=>`<tr><td>${i+1}</td><td>${i<d.through?num(v):'—'}</td><td>${i<d.daily.prev[ANS.metric].length?num(d.daily.prev[ANS.metric][i]):'—'}</td></tr>`).join('')}</tbody></table></div></details></section>`;
   /* anuncios */
   const paid=d.channels.filter(c=>/Paid|Cross-network|Display/i.test(c.name));
@@ -419,7 +419,7 @@ function drawChart(){
     const xh=svg.querySelector('#anx'); xh.setAttribute('x1',x(i)); xh.setAttribute('x2',x(i));
     const cc=svg.querySelector('#ancc'), pc=svg.querySelector('#anpc');
     cc.setAttribute('cx',cv==null?-10:x(i)); cc.setAttribute('cy',cv==null?-10:y(cv)); pc.setAttribute('cx',pvv==null?-10:x(i)); pc.setAttribute('cy',pvv==null?-10:y(pvv));
-    tip.hidden=false; tip.innerHTML=`<b>Día ${i+1}</b><span><i class="sw cur"></i>${cap1(MES)}: ${cv==null?'—':num(cv)}${d.current&&i===d.through-1?' (incompleto)':''}</span><span><i class="sw prev"></i>${cap1(MES_ES[d.prevMonth])}: ${pvv==null?'—':num(pvv)}</span>`;
+    tip.hidden=false; tip.innerHTML=`<b>Día ${i+1}</b><span><i class="lgs cur"></i>${cap1(MES)}: ${cv==null?'—':num(cv)}${d.current&&i===d.through-1?' (incompleto)':''}</span><span><i class="lgs prev"></i>${cap1(MES_ES[d.prevMonth])}: ${pvv==null?'—':num(pvv)}</span>`;
     const tx=Math.min(Math.max(x(i)-tip.offsetWidth/2,4),W-tip.offsetWidth-4); tip.style.left=tx+'px';
   };
   svg.addEventListener('pointermove',show); svg.addEventListener('pointerdown',show);

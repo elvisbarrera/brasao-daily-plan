@@ -18,9 +18,15 @@ let tokenCache = { token: null, exp: 0 };
 const b64url = (s) => Buffer.from(s).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 
 export function normalizeKey(raw) {
+  /* Acepta la llave como venga pegada: con \n escritos, con saltos reales, con espacios, entre comillas,
+     o incluso el JSON completo de la cuenta. Reconstruye un PEM limpio. */
   let k = String(raw || "").trim();
-  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) k = k.slice(1, -1);
-  return k.replace(/\\n/g, "\n");
+  if (k.startsWith("{")) { try { k = JSON.parse(k).private_key || k; } catch (e) {} }
+  k = k.replace(/\\n/g, "\n").replace(/\\r/g, "");
+  const m = k.match(/-----BEGIN ([A-Z ]*PRIVATE KEY)-----([\s\S]*?)-----END \1-----/);
+  if (!m) return k;
+  const body = m[2].replace(/[^A-Za-z0-9+/=]/g, "");
+  return `-----BEGIN ${m[1]}-----\n${body.match(/.{1,64}/g).join("\n")}\n-----END ${m[1]}-----\n`;
 }
 
 export function signJwt(email, key, now = Math.floor(Date.now() / 1000)) {
@@ -38,10 +44,13 @@ export function signJwt(email, key, now = Math.floor(Date.now() / 1000)) {
 async function getToken(email, key) {
   const now = Math.floor(Date.now() / 1000);
   if (tokenCache.token && tokenCache.exp - 120 > now) return tokenCache.token;
+  let assertion;
+  try { assertion = signJwt(email, key, now); }
+  catch (e) { throw new Err("key", "La llave GA_PRIVATE_KEY en Netlify no se puede leer. Pega otra vez el private_key completo (de -----BEGIN a -----END PRIVATE KEY-----)."); }
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: signJwt(email, key, now) }),
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || !j.access_token) throw new Err("auth", `Google no aceptó la cuenta de servicio (${j.error_description || j.error || res.status}).`);

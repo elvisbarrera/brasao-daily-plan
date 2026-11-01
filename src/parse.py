@@ -1,6 +1,14 @@
 import csv, io, re, json
-import sys
+import sys, os, calendar
 src = open(sys.argv[1] if len(sys.argv)>1 else 'sheet_export.txt', encoding='utf-8').read()
+OUT = sys.argv[2] if len(sys.argv)>2 else 'data.json'
+# mes del export: lo saca del título (OCTOBER/NOVEMBER/... 2026)
+FULL = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER']
+MNUM = next(i+1 for i,m in enumerate(FULL) if re.search(m+r' 2026', src[:3000]))
+AB = calendar.month_abbr[MNUM]  # 'Oct', 'Nov'
+MFULL = FULL[MNUM-1]
+ND = calendar.monthrange(2026, MNUM)[1]
+print('mes', MFULL, ND, 'días')
 secs = {}
 for part in src.split('## Sheet name: ')[1:]:
     name, _, body = part.partition('\n')
@@ -9,16 +17,15 @@ def key(k):
     return [v for n,v in secs.items() if k in n][0]
 def rows(text):
     return list(csv.reader(io.StringIO(text)))
-MON = {'Oct':10,'Nov':11}
 def dnum(s):
-    m = re.match(r'Oct (\d+)', s.strip()); return int(m.group(1)) if m else None
+    m = re.match(AB+r' (\d+)', s.strip()); return int(m.group(1)) if m else None
 
-days = {d:{'feed':None,'stories':[],'email':None,'ads':[],'events':[]} for d in range(1,32)}
+days = {d:{'feed':None,'stories':[],'email':None,'ads':[],'events':[]} for d in range(1,ND+1)}
 
 # content calendar
 cal = {}
 for r in rows(key('Content Calendar')):
-    if r and re.match(r'Oct \d+$', r[0].strip()) and len(r)>=11:
+    if r and re.match(AB+r' \d+$', r[0].strip()) and len(r)>=11:
         d = dnum(r[0])
         email=None
         if len(r)>=12 and r[11].strip():
@@ -34,7 +41,7 @@ text = key('Daily Posting Guide')
 cur=None
 for r in rows(text):
     if not r: continue
-    m = re.match(r'OCTOBER (\d+) ·', r[0])
+    m = re.match(MFULL+r' (\d+) ·', r[0])
     if m: cur=int(m.group(1)); continue
     if cur and r[0]!='TIME' and len(r)>=8 and re.match(r'\d+:\d+ [AP]M', r[0]):
         t,slot,fmt,topic,overlay,visual,plat,loc=r[:8]
@@ -46,21 +53,26 @@ for r in rows(text):
             days[cur]['stories'].append(item)
 # key dates
 def span(s):
+    """Días del mes que cubre una fecha del Sheet. None si es de otro mes."""
     s=s.strip()
-    m=re.match(r'Oct (\d+) → Nov (\d+)',s)
-    if m: return int(m.group(1)),31
-    m=re.match(r'Oct (\d+)-(\d+)',s)
-    if m: return int(m.group(1)),int(m.group(2))
-    m=re.match(r'Oct (\d+)$',s)
-    if m: return int(m.group(1)),int(m.group(1))
-    m=re.match(r'Nov',s); 
-    return None
+    m=re.match(r'(\w{3}) (\d+) → (\w{3}) (\d+)',s)
+    if m:
+        a=int(m.group(2)) if m.group(1)==AB else 1
+        b=int(m.group(4)) if m.group(3)==AB else ND
+        return (a,b) if AB in (m.group(1),m.group(3)) else None
+    if not s.startswith(AB+' '): return None
+    m=re.match(AB+r' (\d+)-(\d+)',s)
+    if m: return list(range(int(m.group(1)),int(m.group(2))+1))
+    nums=[int(x) for x in re.findall(r'\d+',s.split(',')[0])]
+    return nums or None
 for r in rows(key('Key Dates')):
-    if r and r[0].startswith(('Oct','Nov')) and len(r)>=7:
+    if r and len(r)>=7 and re.match(r'[A-Z][a-z]{2} \d',r[0]):
         sp=span(r[0])
         if not sp: continue
-        ev={'date':r[0],'event':r[2],'market':r[3],'type':r[4],'why':r[5],'play':r[6],'start':sp[0],'end':sp[1]}
-        for d in range(sp[0],sp[1]+1): days[d]['events'].append(ev)
+        ds=list(range(sp[0],sp[1]+1)) if isinstance(sp,tuple) else sp
+        ds=[d for d in ds if 1<=d<=ND]
+        ev={'date':r[0],'event':r[2],'market':r[3],'type':r[4],'why':r[5],'play':r[6],'start':ds[0],'end':ds[-1]}
+        for d in ds: days[d]['events'].append(ev)
 # ads allocation
 alloc={}
 for r in rows(key('Ads Allocation')):
@@ -70,21 +82,21 @@ for r in rows(key('Ads Allocation')):
 camps=[]
 for r in rows(key('Daily Ad Spend')):
     if len(r)>=7 and r[1] in ('Instagram','TikTok','FB San Antonio','FB Plano','FB Irving','DFW Remarketing','Google Search','Google Performance Max'):
-        vals=r[6:6+31]; vals+= ['']*(31-len(vals))
+        vals=r[6:6+ND]; vals+= ['']*(ND-len(vals))
         amt=[int(re.sub(r'[^\d]','',v) or 0) if v.strip() else 0 for v in vals]
         name=r[0].strip()
         camps.append({'name':name,'platform':r[1],'amt':amt,'total':r[5],'start':r[2],'end':r[3],'info':alloc.get(name)})
 missing=[c['name'] for c in camps if not c['info']]
 print('camps',len(camps),'missing alloc',missing)
-for d in range(1,32):
+for d in range(1,ND+1):
     for c in camps:
         a=c['amt'][d-1]
         if a:
             prev=c['amt'][d-2] if d>1 else 0
-            nxt=c['amt'][d] if d<31 else 0
+            nxt=c['amt'][d] if d<ND else 0
             days[d]['ads'].append({'i':camps.index(c),'amt':a,'on':not prev,'off':not nxt})
 # guardrails + moves + scorecard + thresholds
-strat=rows(key('October Strategy'))
+strat=rows(key(' Strategy'))
 guard=[];moves=[];score=[];fixes=[]
 mode=None
 for r in strat:
@@ -106,9 +118,9 @@ for r in rows(key('Spend Tracker')):
 budget=[]
 for r in rows(key('Spend Tracker')):
     pass
-out={'days':days,'camps':camps,'guard':guard,'moves':moves,'fixes':fixes,'score':score,'thr':thr}
-json.dump(out,open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)),'data.json'),'w'),ensure_ascii=False,separators=(',',':'))
-print({d:(1 if days[d]['feed'] else 0,len(days[d]['stories']),len(days[d]['ads']),len(days[d]['events']), bool(days[d]['email'])) for d in (1,16,20,21,31)})
+out={'month':MNUM,'ndays':ND,'days':days,'camps':camps,'guard':guard,'moves':moves,'fixes':fixes,'score':score,'thr':thr}
+json.dump(out,open(os.path.join(os.path.dirname(os.path.abspath(__file__)),OUT),'w'),ensure_ascii=False,separators=(',',':'))
+print({d:(1 if days[d]['feed'] else 0,len(days[d]['stories']),len(days[d]['ads']),len(days[d]['events']), bool(days[d]['email'])) for d in (1,16,20,21,ND)})
 print(len(guard),len(moves),len(fixes),len(score),len(thr))
-tot=[sum(c['amt'][d] for c in camps) for d in range(31)]
+tot=[sum(c['amt'][d] for c in camps) for d in range(ND)]
 print(tot[:6], sum(tot))

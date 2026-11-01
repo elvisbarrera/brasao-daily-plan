@@ -1,11 +1,16 @@
-const D = DATA.days, CAMPS = DATA.camps;
-const MES = 'octubre', DOW = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+/* ---------- meses ----------
+   MONTHS viene de build.py: {10:{data,actuals,budget}, 11:{...}}. Cada mes sale de su Google Sheet. */
+const MES_ES=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MES_EN=['','january','february','march','april','may','june','july','august','september','october','november','december'];
+const MKEYS=Object.keys(MONTHS).map(Number).sort((a,b)=>a-b);
+let DATA, ACTUALS, BUDGET, D, CAMPS, MES, MNUM, NDAYS, inMonth, TODAY, NOWMIN;
+const DOW = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const DOW3 = ['dom','lun','mar','mié','jue','vie','sáb'];
 const LOCS = [['all','Todas'],['sa','San Antonio'],['plano','Plano'],['irving','Irving']];
 const LOCNAME = {sa:'San Antonio',plano:'Plano',irving:'Irving'};
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const dow = d => new Date(Date.UTC(2026,9,d)).getUTCDay();
+const dow = d => new Date(Date.UTC(2026,MNUM-1,d)).getUTCDay();
 const money = n => '$'+Math.round(n).toLocaleString('en-US');
 
 /* storage (per viewer, may be unavailable) */
@@ -23,9 +28,19 @@ function chicagoNow(){
   return {y:+p.year,m:+p.month,d:+p.day,min:(+p.hour%24)*60+ +p.minute};
 }
 const now = chicagoNow();
-const inMonth = now.y===2026 && now.m===10;
-const TODAY = inMonth ? now.d : (now.y*100+now.m < 202610 ? 1 : 31);
-const NOWMIN = inMonth ? now.min : -1;
+/* "K": prefijo de las tareas hechas. Octubre sin prefijo (así no se pierde lo que ya marcaste). */
+const K = d => (MNUM===10?'':MNUM+'/')+d;
+function setMonth(m){
+  const x=MONTHS[m]; MNUM=m; DATA=x.data; ACTUALS=x.actuals; BUDGET=x.budget;
+  D=DATA.days; CAMPS=DATA.camps; MES=MES_ES[m]; NDAYS=DATA.ndays||new Date(Date.UTC(2026,m,0)).getUTCDate();
+  inMonth = now.y===2026 && now.m===m;
+  TODAY = inMonth ? now.d : (now.y*100+now.m < 202600+m ? 1 : NDAYS);
+  NOWMIN = inMonth ? now.min : -1;
+}
+/* mes inicial: el que guardaste, si no el mes actual, si no el último */
+let m0=+store.get('month');
+if(!MONTHS[m0]) m0 = now.y===2026&&MONTHS[now.m] ? now.m : MKEYS[MKEYS.length-1];
+setMonth(m0);
 
 const S = { tab:'hoy', day:TODAY, loc: store.get('loc')||'all', plat:'all' };
 if(!LOCS.some(l=>l[0]===S.loc)) S.loc='all';
@@ -65,18 +80,20 @@ async function copyText(txt){
 }
 
 /* ---------- links de stories ---------- */
-const SITE='https://www.brasaousa.com';
+const SITE='https://www.brasaousa.com', GIFT='https://brasaousa.cardfoundry.com';
 const OTAB={sa:'https://www.opentable.com/booking/restref/availability?restRef=262078&partySize=2',plano:'https://www.opentable.com/booking/restref/availability?restRef=1114516&partySize=2',irving:'https://www.opentable.com/booking/restref/availability?restRef=1254919&partySize=2'};
 const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-function siteUrl(path,topic){ const [p,h]=path.split('#'); return SITE+p+'?utm_source=instagram&utm_medium=organic&utm_campaign=october_2026&utm_content=story_'+slug(topic)+(h?'#'+h:'') }
+function siteUrl(path,topic){ const [p,h]=path.split('#'); return SITE+p+'?utm_source=instagram&utm_medium=organic&utm_campaign='+MES_EN[MNUM]+'_2026&utm_content=story_'+slug(topic)+(h?'#'+h:'') }
 /* Qué link lleva cada story. Se calcula con el tema, el formato y la sucursal que vienen del Google Sheet. */
 function storyLink(s){
   const t=s.topic||'', f=s.format||'', L=s.loc||'';
   const yes=(label,url,why)=>({use:true,label,url,why});
   const no=why=>({use:false,why});
+  if(/Gift Card|Black Friday|Cyber Monday/i.test(t)) return yes('Shop gift cards',GIFT+'?utm_source=instagram&utm_medium=organic&utm_campaign='+MES_EN[MNUM]+'_2026&utm_content=story_'+slug(t),'Tarjetas de regalo. El link va a la tienda de gift cards (brasaousa.cardfoundry.com).');
   if(/December|Private|Holiday Party/i.test(t)) return yes('Plan your event',siteUrl('/private-events',t),'Eventos privados de diciembre. El link va a la página de eventos.');
   if(/Poll|Countdown/.test(f)) return no(`El sticker de ${/Poll/.test(f)?'encuesta':'cuenta regresiva'} ya es la interacción de esta story.`);
-  if(/Thank You|Happy Halloween|Bar Energy|Night Carve|Saturday Sizzle|Sunday Family/i.test(t)) return no('Es ambiente, no pide una acción.');
+  if(/CONFIRM/.test(t)) return no('Publícala solo si el dueño ya confirmó. Es informativa, sin link.');
+  if(/Thank You|Happy Halloween|Bar Energy|Night Carve|Saturday Sizzle|Sunday Family|Happy Thanksgiving|Gratitude|Veterans|Proclama|Muertos|Clocks|Small Business|Game Tomorrow/i.test(t)) return no('Es ambiente o una fecha especial, no pide una acción.');
   if(/Happy Hour/i.test(t)) return yes('Happy Hour menu',siteUrl('/happy-hour',t),'Happy Hour en el bar. El link va al menú.');
   if(/Executive Lunch/i.test(t)) return yes('Executive Lunch',siteUrl('/executive-lunch',t),'Almuerzo de lunes a viernes. El link va a la página del Executive Lunch.');
   if(/Dessert/i.test(t)) return yes('Drinks & desserts',siteUrl('/drink-menu',t),'Postres y bebidas. El link va al menú de bebidas y postres.');
@@ -92,20 +109,20 @@ function storyLink(s){
 function visibleAds(d){ return D[d].ads.filter(a=>tagOK(campTag(CAMPS[a.i]))) }
 function dayTasks(d){
   const day=D[d], list=[];
-  if(day.feed) list.push({id:`${d}:feed`,t:mins(day.feed.time),kind:'feed',x:day.feed});
-  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${d}:s${i}`,t:mins(s.time),kind:'story',x:s}) });
-  if(day.email){ const m=day.email.send.match(/(\d+(?::\d+)?\s*[AP]M)/i); list.push({id:`${d}:email`,t:m?mins(m[1]):600,kind:'email',x:day.email}) }
+  if(day.feed) list.push({id:`${K(d)}:feed`,t:mins(day.feed.time),kind:'feed',x:day.feed});
+  day.stories.forEach((s,i)=>{ if(tagOK(tag(s.loc))) list.push({id:`${K(d)}:s${i}`,t:mins(s.time),kind:'story',x:s}) });
+  if(day.email){ const m=day.email.send.match(/(\d+(?::\d+)?\s*[AP]M)/i); list.push({id:`${K(d)}:email`,t:m?mins(m[1]):600,kind:'email',x:day.email}) }
   list.sort((a,b)=>a.t-b.t);
   return list;
 }
-function adTasks(d){ const out=[]; visibleAds(d).forEach(a=>{ if(a.on) out.push({id:`${d}:ad${a.i}:on`}); if(a.off) out.push({id:`${d}:ad${a.i}:off`}) }); return out }
+function adTasks(d){ const out=[]; visibleAds(d).forEach(a=>{ if(a.on) out.push({id:`${K(d)}:ad${a.i}:on`}); if(a.off) out.push({id:`${K(d)}:ad${a.i}:off`}) }); return out }
 function routine(d){
-  const r=[{id:`${d}:r1`,txt:'Comparte en tus Stories lo que los clientes publicaron y te etiquetaron.',sub:'Todos los días'}];
-  if(d>=5) r.push({id:`${d}:r2`,txt:'Revisa los leads de eventos privados. El gerente de cada sucursal responde en menos de 24 horas.',sub:'Plan Book December'});
+  const r=[{id:`${K(d)}:r1`,txt:'Comparte en tus Stories lo que los clientes publicaron y te etiquetaron.',sub:'Todos los días'}];
+  if(d>=5||MNUM!==10) r.push({id:`${K(d)}:r2`,txt:'Revisa los leads de eventos privados. El gerente de cada sucursal responde en menos de 24 horas.',sub:'Plan Book December'});
   if(dow(d)===1) r.push(
-    {id:`${d}:w1`,txt:'Anota el gasto real de la semana en el Spend Tracker (celdas amarillas).',sub:'Lunes'},
-    {id:`${d}:w2`,txt:'Compara tus métricas con las alertas de la pestaña Guía y pausa lo que esté en rojo.',sub:'Lunes'},
-    {id:`${d}:w3`,txt:'Programa 1 post de Google Business Profile por sucursal esta semana.',sub:'Semanal'});
+    {id:`${K(d)}:w1`,txt:'Anota el gasto real de la semana en el Spend Tracker (celdas amarillas).',sub:'Lunes'},
+    {id:`${K(d)}:w2`,txt:'Compara tus métricas con las alertas de la pestaña Guía y pausa lo que esté en rojo.',sub:'Lunes'},
+    {id:`${K(d)}:w3`,txt:'Programa 1 post de Google Business Profile por sucursal esta semana.',sub:'Semanal'});
   return r;
 }
 function progress(d){
@@ -174,7 +191,7 @@ function renderHoy(){
   let h='';
   h+=renderNow();
   h+=`<div class="hero"><div class="ring" style="--p:${pr.pct}"><i class="num">${pr.pct}%</i></div><div><p id="intro">${intro}</p><small class="num" id="prog">${pr.n} de ${pr.total} hechas · anuncios del día ${money(spend)}</small></div></div>`;
-  if(!inMonth && d===TODAY) h+=`<p class="note">El plan cubre del 1 al 31 de octubre de 2026. Estás viendo el ${d===1?'primer':'último'} día.</p>`;
+  if(!inMonth && d===TODAY) h+=`<p class="note">El plan cubre del 1 al ${NDAYS} de ${MES} de 2026. Estás viendo el ${d===1?'primer':'último'} día.</p>`;
 
   if(evs.length){
     h+=`<section class="sec"><h2>Fechas importantes</h2><div class="group">`+evs.map(e=>{
@@ -186,7 +203,7 @@ function renderHoy(){
   /* ads */
   if(ads.length){
     const grp=(label,arr,cls,txt)=>arr.length?`<div class="group" style="margin-top:8px">${arr.map(a=>{const c=CAMPS[a.i];
-      const k=`${d}:ad${a.i}:`+(cls==='on'?'on':cls==='off'?'off':'x');
+      const k=`${K(d)}:ad${a.i}:`+(cls==='on'?'on':cls==='off'?'off':'x');
       const row=`<details class="ad"><summary><span class="dot ${platCls(c.platform)}"></span><span class="a-name">${esc(c.name)}</span><span class="a-amt">${money(a.amt)}</span><span class="act ${cls}">${txt}</span></summary>${adDetails(c)}</details>`;
       return cls==='run'?row:`<div class="task" style="padding:0 0 0 14px;align-items:center">${chk(k)}<div style="flex:1;min-width:0">${row}</div></div>`}).join('')}</div>`:'';
     const on=ads.filter(a=>a.on), off=ads.filter(a=>a.off&&!a.on), both=ads.filter(a=>a.on&&a.off), run=ads.filter(a=>!a.on&&!a.off);
@@ -240,14 +257,14 @@ function renderHoy(){
 }
 
 function renderSemana(){
-  let h=`<section class="sec"><h2>Octubre 2026</h2><div class="group"><div class="cal">`+DOW3.map(x=>`<div class="dow">${x}</div>`).join('');
+  let h=`<section class="sec"><h2>${cap1(MES)} 2026</h2><div class="group"><div class="cal">`+DOW3.map(x=>`<div class="dow">${x}</div>`).join('');
   for(let i=0;i<dow(1);i++) h+=`<div class="cell empty"></div>`;
-  for(let d=1;d<=31;d++){
+  for(let d=1;d<=NDAYS;d++){
     const sp=D[d].ads.reduce((s,a)=>s+a.amt,0), star=D[d].events.some(e=>/★/.test(e.event)||/Game|Observance|Holiday|Brazilian|Cultural/.test(e.type)&&e.start===e.end);
     h+=`<button class="cell ${d===TODAY&&inMonth?'today':''} ${d===S.day?'sel':''}" data-go="${d}" aria-label="${dayLabel(d)}"><b>${d}</b><small>${money(sp)}</small>${star?'<span class="st">★</span>':''}</button>`;
   }
   h+=`</div></div><p class="note">★ día con fecha clave. Toca un día para ver qué hacer.</p></section>`;
-  const from=S.day, to=Math.min(31,from+6);
+  const from=S.day, to=Math.min(NDAYS,from+6);
   h+=`<section class="sec"><h2>Próximos días</h2><div class="group">`;
   for(let d=from;d<=to;d++){
     const day=D[d], ev=day.events.filter(e=>/★/.test(e.event)||e.start===e.end)[0]||day.events[0];
@@ -264,17 +281,19 @@ function renderAds(){
   const spent=upto(S.day), todaySp=visibleAds(S.day).reduce((s,a)=>s+a.amt,0);
   let h='';
   /* real spend */
-  if(typeof ACTUALS!=='undefined' && ACTUALS.platforms){
+  if(!(ACTUALS&&ACTUALS.platforms&&ACTUALS.platforms.length)){
+    REALH=`<section class="sec"><h2>Gasto real</h2><div class="group"><div class="empty-s">Todavía no hay gasto real de ${MES}. Aquí aparece cuando se actualice desde Meta, TikTok y Google.</div></div></section>`;
+  } else {
     const th=ACTUALS.through||S.day;
     const real=ACTUALS.platforms.reduce((s,p)=>s+(p.spent||0),0);
     const plan=CAMPS.filter(c=>!/Google/.test(c.platform)).reduce((s,c)=>s+c.amt.slice(0,th).reduce((a,b)=>a+b,0),0);
     const diff=real-plan;
-    const bud=(typeof BUDGET!=='undefined'&&BUDGET.monthly)||24000, left=bud-real, dl=Math.max(1,31-th), pace=real/th*31, pct=Math.min(100,Math.round(100*real/bud));
-    REALH=`<section class="sec"><h2>Gasto real <span>actualizado ${esc(ACTUALS.updated)}</span></h2><div class="tiles"><div class="tile"><small>Gastado</small><b class="num">${money(real)}</b></div><div class="tile"><small>Presupuesto</small><b class="num">${money(bud)}</b></div><div class="tile"><small>${left>=0?'Libre':'Te pasaste'}</small><b class="num" style="color:var(--${left>=0?'ok':'bad'})">${money(Math.abs(left))}</b></div></div><div class="group" style="margin-top:8px"><div class="pbar"><div class="row"><span>${pct}% del presupuesto gastado, día ${th} de 31</span><span class="num">${money(real)}</span></div><div class="track"><i style="width:${pct}%"></i></div><p class="note" style="padding:8px 0 0">${left>=0?'Libre hasta el 31: '+money(left)+' (unos '+money(left/dl)+' al día, '+dl+' días)':'Te pasaste por '+money(-left)}.</p></div></div><div class="group" style="margin-top:8px">`+ACTUALS.platforms.map(p=>`<details class="item"><summary><span>${esc(p.name)}</span><span class="num" style="font-weight:700">${p.spent==null?'—':money(p.spent)}</span></summary>${p.note?`<p>${esc(p.note)}</p>`:''}${(p.campaigns||[]).map(c=>`<p style="display:flex;justify-content:space-between;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><b class="num" style="color:var(--fg)">${money(c.spent)}</b></p>`).join('')}</details>`).join('')+`</div><p class="note">Gasto desde el 1 de octubre en Meta Ads Manager y TikTok. Incluye Google.</p></section>`;
+    const bud=(BUDGET&&BUDGET.monthly)||24000, left=bud-real, dl=Math.max(1,NDAYS-th), pace=real/th*NDAYS, pct=Math.min(100,Math.round(100*real/bud));
+    REALH=`<section class="sec"><h2>Gasto real <span>actualizado ${esc(ACTUALS.updated)}</span></h2><div class="tiles"><div class="tile"><small>Gastado</small><b class="num">${money(real)}</b></div><div class="tile"><small>Presupuesto</small><b class="num">${money(bud)}</b></div><div class="tile"><small>${left>=0?'Libre':'Te pasaste'}</small><b class="num" style="color:var(--${left>=0?'ok':'bad'})">${money(Math.abs(left))}</b></div></div><div class="group" style="margin-top:8px"><div class="pbar"><div class="row"><span>${pct}% del presupuesto gastado, día ${th} de ${NDAYS}</span><span class="num">${money(real)}</span></div><div class="track"><i style="width:${pct}%"></i></div><p class="note" style="padding:8px 0 0">${left>=0?'Libre hasta el '+NDAYS+': '+money(left)+' (unos '+money(left/dl)+' al día, '+dl+' días)':'Te pasaste por '+money(-left)}.</p></div></div><div class="group" style="margin-top:8px">`+ACTUALS.platforms.map(p=>`<details class="item"><summary><span>${esc(p.name)}</span><span class="num" style="font-weight:700">${p.spent==null?'—':money(p.spent)}</span></summary>${p.note?`<p>${esc(p.note)}</p>`:''}${(p.campaigns||[]).map(c=>`<p style="display:flex;justify-content:space-between;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><b class="num" style="color:var(--fg)">${money(c.spent)}</b></p>`).join('')}</details>`).join('')+`</div><p class="note">Gasto desde el 1 de ${MES} en Meta Ads Manager y TikTok. Incluye Google.</p></section>`;
   }
   /* by platform (real) */
-  const bud2=(typeof BUDGET!=='undefined'&&BUDGET.monthly)||24000;
-  if(typeof ACTUALS!=='undefined'&&ACTUALS.platforms){
+  const bud2=(BUDGET&&BUDGET.monthly)||24000;
+  if(ACTUALS&&ACTUALS.platforms&&ACTUALS.platforms.length){
     h+=`<section class="sec"><h2>Gasto por plataforma <span>de ${money(bud2)}</span></h2><div class="group">`+ACTUALS.platforms.map(p=>`<div class="pbar"><div class="row"><span>${esc(p.name)}</span><span class="num">${p.spent==null?'—':money(p.spent)}</span></div><div class="track"><i style="width:${Math.min(100,Math.round(100*(p.spent||0)/bud2))}%"></i></div></div>`).join('')+`</div></section>`;
   }
   const plats=['all','Instagram','TikTok','Facebook','Google'];
@@ -284,7 +303,7 @@ function renderAds(){
   list.forEach(({c})=>{
     const a=c.amt, d=S.day, first=a.findIndex(x=>x>0)+1, last=a.length-[...a].reverse().findIndex(x=>x>0);
     const st = a[d-1]>0?`<span class="act on">Hoy ${money(a[d-1])}</span>`: d<first?`<span class="act run">Inicia el ${first}</span>`: d>last?`<span class="act off">Terminó</span>`:`<span class="act run">Pausa hoy</span>`;
-    h+=`<details class="ad"><summary><span class="dot ${platCls(c.platform)}"></span><span class="a-name">${esc(c.name)}</span>${st}</summary>${adDetails(c)}<div class="strip" aria-hidden="true">${a.map((x,i)=>`<i class="${x?'a':''} ${i+1===d?'t':''}"></i>`).join('')}</div><p class="note" style="padding:4px 0 0">Días activos en octubre. Contorno = día seleccionado.</p></details>`;
+    h+=`<details class="ad"><summary><span class="dot ${platCls(c.platform)}"></span><span class="a-name">${esc(c.name)}</span>${st}</summary>${adDetails(c)}<div class="strip" aria-hidden="true">${a.map((x,i)=>`<i class="${x?'a':''} ${i+1===d?'t':''}"></i>`).join('')}</div><p class="note" style="padding:4px 0 0">Días activos en ${MES}. Contorno = día seleccionado.</p></details>`;
   });
   return REALH+h+`</div></section>`;
 }
@@ -292,14 +311,14 @@ function renderAds(){
 function renderGuia(){
   let h=`<section class="sec"><h2>Antes de publicar</h2><div class="group">`+DATA.guard.map(g=>`<details class="item"><summary>${esc(g[0])}</summary><p>${esc(g[1])}</p></details>`).join('')+`</div></section>`;
   h+=`<section class="sec"><h2>Alertas de rendimiento <span>revisa cada lunes</span></h2><div class="group scroll-x"><table class="thr"><thead><tr><th>Dónde</th><th>Métrica</th><th>Bien</th><th>Vigila</th><th>Pausa</th></tr></thead><tbody>`+DATA.thr.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="g">${esc(r[2])}</td><td class="y">${esc(r[3])}</td><td class="r">${esc(r[4])}</td></tr>`).join('')+`</tbody></table></div><p class="note">Si está en rojo: ${''}abre la fila en el Excel (columna Action if red).</p></section>`;
-  h+=`<section class="sec"><h2>Metas de octubre</h2><div class="group">`+DATA.score.map(s=>`<details class="item"><summary>${esc(s[0])}</summary><p><b>Meta:</b> ${esc(s[2])}<br><b>Responsable:</b> ${esc(s[3])} · ${esc(s[4])}</p></details>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Metas de ${MES}</h2><div class="group">`+DATA.score.map(s=>`<details class="item"><summary>${esc(s[0])}</summary><p><b>Meta:</b> ${esc(s[2])}<br><b>Responsable:</b> ${esc(s[3])} · ${esc(s[4])}</p></details>`).join('')+`</div></section>`;
   h+=`<section class="sec"><h2>10 movimientos del mes</h2><div class="group">`+DATA.moves.map(m=>`<details class="item"><summary>${esc(m[0])}</summary><p>${esc(m[1])}</p></details>`).join('')+`</div></section>`;
   h+=`<section class="sec"><h2>Links en las stories</h2><div class="group">
     <details class="item"><summary>Cuándo llevan link y cuándo no</summary><p><b>Sí:</b> stories que piden una acción (reservar, ver el menú, planear un evento). <b>No:</b> ambiente, behind the scenes, encuestas y cuentas regresivas. Cada story del día te dice cuál es su caso.</p></details>
-    <details class="item"><summary>Qué link va en cada tipo</summary><p>Abierto hoy, promos de la semana, Couples Night, Prime Rib, Ladies Night, Wagyu, Reserve Tonight, Weekend Reservations: reservar (brasaousa.com/#reserve).<br>Story de un solo local (San Antonio, Plano o Irving): la reserva de ese local en OpenTable.<br>Eventos privados y fiestas de diciembre: /private-events.<br>Executive Lunch: /executive-lunch.<br>Happy Hour: /happy-hour.<br>Postres y bebidas: /drink-menu.<br>Ambiente, behind the scenes y reseñas: sin link.</p></details>
-    <details class="item"><summary>Cómo ponerlo</summary><p>Un solo sticker de link por story. Con texto corto, como "Reserve a table", en vez del link a la vista. Colócalo en la parte de abajo, debajo de brasaousa.com. El link ya trae UTM (instagram, organic, october_2026), así que lo ves en Analytics. En Facebook revisa si te deja poner el link antes de contar con él.</p></details>
+    <details class="item"><summary>Qué link va en cada tipo</summary><p>Abierto hoy, promos de la semana, Couples Night, Prime Rib, Ladies Night, Wagyu, Reserve Tonight, Weekend Reservations: reservar (brasaousa.com/#reserve).<br>Story de un solo local (San Antonio, Plano o Irving): la reserva de ese local en OpenTable.<br>Eventos privados y fiestas de diciembre: /private-events.<br>Gift cards, Black Friday y Cyber Monday: brasaousa.cardfoundry.com.<br>Executive Lunch: /executive-lunch.<br>Happy Hour: /happy-hour.<br>Postres y bebidas: /drink-menu.<br>Ambiente, behind the scenes y reseñas: sin link.</p></details>
+    <details class="item"><summary>Cómo ponerlo</summary><p>Un solo sticker de link por story. Con texto corto, como "Reserve a table", en vez del link a la vista. Colócalo en la parte de abajo, debajo de brasaousa.com. El link ya trae UTM (instagram, organic, ${MES_EN[MNUM]}_2026), así que lo ves en Analytics. En Facebook revisa si te deja poner el link antes de contar con él.</p></details>
   </div></section>`;
-  h+=`<section class="sec"><h2>Hábitos de septiembre</h2><div class="group">`+DATA.fixes.map(m=>`<details class="item"><summary>${esc(m[0])}</summary><p>${esc(m[1])}</p></details>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Hábitos de ${MES_ES[MNUM-1]}</h2><div class="group">`+DATA.fixes.map(m=>`<details class="item"><summary>${esc(m[0])}</summary><p>${esc(m[1])}</p></details>`).join('')+`</div></section>`;
   return h;
 }
 
@@ -314,16 +333,21 @@ function renderBar(){
   let h='';
   if(S.tab==='hoy'){
     h+=`<div class="title-row"><div><h1 class="large">${S.day===TODAY&&inMonth?'Hoy':cap1(DOW[dow(S.day)])}</h1><p class="sub">${cap1(dayLabel(S.day))}</p></div>
-      <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=31?'disabled':''}>›</button></div></div>`;
+      <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=NDAYS?'disabled':''}>›</button></div></div>`;
   } else {
-    const t={semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de octubre`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
+    const t={semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
     h+=`<div class="title-row"><div><h1 class="large">${t[0]}</h1><p class="sub">${t[1]}</p></div></div>`;
   }
   if(S.tab==='hoy'||S.tab==='ads') h+=`<div class="seg" role="group" aria-label="Sucursal">`+LOCS.map(l=>`<button data-loc="${l[0]}" aria-pressed="${S.loc===l[0]}">${l[1]}</button>`).join('')+`</div>`;
   $('#barin').innerHTML=h;
 }
+function renderMonths(){
+  $('#months').innerHTML=MKEYS.map(m=>`<button data-month="${m}" aria-pressed="${m===MNUM}">${cap1(MES_ES[m])}</button>`).join('');
+  $('#months').style.gridTemplateColumns=`repeat(${MKEYS.length},1fr)`;
+  $('#mlabel').textContent=`Plan de ${MES} 2026`;
+}
 function render(){
-  CLIPS=[]; renderBar();
+  CLIPS=[]; renderMonths(); renderBar();
   $('#view').innerHTML = S.tab==='hoy'?renderHoy():S.tab==='semana'?renderSemana():S.tab==='ads'?renderAds():renderGuia();
   $('#tabs').innerHTML=TABS.map(t=>`<button data-tab="${t[0]}" ${S.tab===t[0]?'aria-current="page"':''}>${ICONS[t[0]]}<span>${t[1]}</span></button>`).join('');
   document.title='Plan Diario Brasão';
@@ -338,9 +362,10 @@ document.addEventListener('click',e=>{
   if(b.dataset.k){ const k=b.dataset.k; done[k]=!done[k]; if(!done[k]) delete done[k]; saveDone();
     document.querySelectorAll(`[data-k="${k}"]`).forEach(x=>{x.setAttribute('aria-pressed',!!done[k]); const row=x.closest('[data-row]'); if(row) row.classList.toggle('done',!!done[k])}); updateProgress(); if(!b.closest('#nowcard')) refreshNow(); else setTimeout(refreshNow,600); return }
   if(b.dataset.c!==undefined){ copyText(CLIPS[+b.dataset.c]); return }
+  if(b.dataset.month){ const m=+b.dataset.month; if(m!==MNUM){ setMonth(m); store.set('month',m); S.day=TODAY; S.plat='all'; render(); scrollTo(0,0) } return }
   if(b.dataset.tab){ S.tab=b.dataset.tab; render(); scrollTo(0,0); return }
   if(b.dataset.loc){ S.loc=b.dataset.loc; store.set('loc',S.loc); const y=scrollY; render(); scrollTo(0,y); return }
-  if(b.dataset.step){ S.day=Math.min(31,Math.max(1,S.day+ +b.dataset.step)); render(); scrollTo(0,0); return }
+  if(b.dataset.step){ S.day=Math.min(NDAYS,Math.max(1,S.day+ +b.dataset.step)); render(); scrollTo(0,0); return }
   if(b.dataset.today){ S.day=TODAY; render(); scrollTo(0,0); return }
   if(b.dataset.go){ S.day=+b.dataset.go; S.tab='hoy'; render(); scrollTo(0,0); return }
   if(b.dataset.plat){ S.plat=b.dataset.plat; const y=scrollY; render(); scrollTo(0,y); return }

@@ -1,6 +1,6 @@
 # Brasão Daily Plan
 
-Single-page iOS-style app that tells the Brasão team what to do each day in October 2026: posts and stories (with copy), ads to turn on or off, emails, key dates and guardrails, for San Antonio, Plano and Irving.
+Single-page iOS-style app that tells the Brasão team what to do each day, month by month (October and November 2026 for now; pick the month at the top): posts and stories (with copy), ads to turn on or off, emails, key dates and guardrails, for San Antonio, Plano and Irving.
 
 - `index.html`: the complete app (data inlined). Open it in a browser.
 - `src/parse.py`: turns the "Brasao_October_2026_FULL_PROGRAM" export into `src/data.json`.
@@ -16,3 +16,10 @@ Todo el plan viene del Google Sheet (Brasao_October_2026_FULL_PROGRAM). Para act
 
 ## Links de stories
 `storyLink()` en `src/app.js` deciden, con el tema, formato y sucursal que trae el Sheet, si cada story lleva sticker de link, cuál y con qué texto (con UTM). La pestaña Guía explica las reglas.
+
+## Meses
+Arriba hay un selector de mes. Cada mes tiene sus propios archivos:
+- Octubre: `src/data.json`, `src/actuals.json`, `src/budget.json`
+- Noviembre: `src/data_nov.json`, `src/actuals_nov.json`, `src/budget_nov.json` (Sheet 1wLz3iSXEpbXvY3AMdletFHkFzjArp3Z1IguO_tKmg4s, Brasao_November_2026_FULL_PROGRAM)
+
+`parse.py` detecta el mes solo: `python3 src/parse.py export_noviembre.txt data_nov.json`. Para agregar otro mes, añádelo a `MONTHS` en `src/build.py`.

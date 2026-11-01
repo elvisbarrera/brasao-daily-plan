@@ -631,9 +631,9 @@ function renderAnalytics(){
   const tile=(lbl,c,p)=>`<div class="tile"><small>${lbl}</small><b class="num">${num(c)}</b><small class="num">${chg(c,p)} <span style="color:var(--fg3)">antes ${num(p)}</span></small></div>`;
   const E=d.events;
   h+=`<section class="sec"><h2>Resumen <span>brasaousa.com</span></h2><div class="tiles">`+
-    tile('Visitas',T.cur.sessions,T.prev.sessions)+tile('Personas',T.cur.totalUsers,T.prev.totalUsers)+tile('Clics en Reservar',E.reserve_click.cur,E.reserve_click.prev)+
+    tile('Visitas',T.cur.sessions,T.prev.sessions)+tile('Personas',T.cur.totalUsers,T.prev.totalUsers)+tile('Clics en Reservar',T.cur.reserves,T.prev.reserves)+
     tile('Llamadas',E.phone_click.cur,E.phone_click.prev)+tile('Cómo llegar',E.directions_click.cur,E.directions_click.prev)+tile('Clics a gift cards',d.giftCards.cur,d.giftCards.prev)+
-    `</div><p class="note">Visitas con interacción: ${Math.round(T.cur.engagementRate*100)}% (antes ${Math.round(T.prev.engagementRate*100)}%). Personas nuevas: ${num(T.cur.newUsers)}.</p></section>`;
+    `</div>${trackNote(d)}<p class="note">Visitas con interacción: ${Math.round(T.cur.engagementRate*100)}% (antes ${Math.round(T.prev.engagementRate*100)}%). Personas nuevas: ${num(T.cur.newUsers)}.</p></section>`;
   /* gráfica */
   h+=`<section class="sec"><h2>Por día</h2><div class="fchips">`+[['sessions','Visitas'],['reserves','Clics en Reservar']].map(([k,l])=>`<button data-anm="${k}" aria-pressed="${ANS.metric===k}">${l}</button>`).join('')+`</div>
     <div class="group chartbox"><div class="legend"><span><i class="sw cur"></i>${cap1(MES)}</span><span><i class="sw prev"></i>${cap1(PM)}</span></div><div id="anchart" class="chart"></div><div id="antip" class="ctip" hidden></div></div>
@@ -658,7 +658,17 @@ function renderAnalytics(){
   h+=`<p class="note">Datos de Google Analytics (www.brasaousa.com), leídos ${age<1?'hace un momento':'hace '+age+' min'}. <button class="linkbtn" data-anreload="1">Actualizar</button></p>`;
   return h;
 }
-const chName = n => ({'Organic Search':'Google orgánico','Paid Search':'Google pagado','Paid Social':'Redes pagadas (anuncios)','Organic Social':'Redes orgánicas','Direct':'Directo','Referral':'Otros sitios','Cross-network':'Google PMax (varias redes)','Unassigned':'Sin asignar','Email':'Email','Display':'Display','Organic Video':'Video orgánico','Paid Video':'Video pagado','Paid Other':'Otro pagado','Organic Maps':'Google Maps','Organic Shopping':'Shopping orgánico'}[n]||n);
+/* Los clics en Reservar, Llamadas y Cómo llegar se empezaron a medir a fines de octubre: avisa cuando el mes anterior no los tiene completos. */
+function trackNote(d){
+  const pr=d.daily.prev.reserves, cr=d.daily.cur.reserves.slice(0,d.through);
+  const pi=pr.findIndex(v=>v>0), ci=cr.findIndex(v=>v>0);
+  let when='';
+  if(pi>0) when=`${pi+1} de ${MES_ES[d.prevMonth]}`;
+  else if(pi<0 && ci>=0) when=`${ci+1} de ${MES}`;
+  if(!when) return '';
+  return `<p class="note"><b>Ojo:</b> los clics en Reservar, Llamadas y Cómo llegar se empezaron a medir el ${when}. Antes de esa fecha salen en 0, así que su comparación todavía no es pareja.</p>`;
+}
+const chName = n => ({'Organic Search':'Google orgánico','Paid Search':'Google pagado','Paid Social':'Redes pagadas (anuncios)','Organic Social':'Redes orgánicas','Direct':'Directo','Referral':'Otros sitios','Cross-network':'Google PMax (varias redes)','AI Assistant':'Asistentes de IA (ChatGPT, etc.)','SMS':'SMS','Unassigned':'Sin asignar','Email':'Email','Display':'Display','Organic Video':'Video orgánico','Paid Video':'Video pagado','Paid Other':'Otro pagado','Organic Maps':'Google Maps','Organic Shopping':'Shopping orgánico'}[n]||n);
 function drawChart(){
   const box=document.getElementById('anchart'), st=AN[MNUM]; if(!box||!st||st.st!=='ok') return;
   const d=st.d, k=ANS.metric, cur=d.daily.cur[k].slice(0,d.through), prev=d.daily.prev[k], N=d.ndays;

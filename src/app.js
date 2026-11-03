@@ -45,7 +45,7 @@ let m0=+store.get('month');
 if(!MONTHS[m0]) m0 = MKEYS.find(k=>{const p=ym(k);return p.y===now.y&&p.m===now.m}) ?? MKEYS[MKEYS.length-1];
 setMonth(m0);
 
-const S = { tab:'hoy', day:TODAY, loc: store.get('loc')||'all', plat:'all' };
+const S = { tab:'dashboard', day:TODAY, loc: store.get('loc')||'all', plat:'all' };
 if(!LOCS.some(l=>l[0]===S.loc)) S.loc='all';
 
 /* helpers */
@@ -344,7 +344,7 @@ function loadAN(m, force){
     .then(r=>r.json().catch(()=>({ok:false,code:'bad',error:`El servidor respondió ${r.status}.`})))
     .then(j=>{ AN[m]= j&&j.ok ? {st:'ok',d:j,at:Date.now()} : {st:'err',d:j||{},at:Date.now()} })
     .catch(()=>{ AN[m]={st:'err',d:{code:'net',error:'No hay conexión con el servidor de la app.'},at:Date.now()} })
-    .finally(()=>{ if(S.tab==='analytics' && MKEY===m){ const y=scrollY; render(); scrollTo(0,y) } });
+    .finally(()=>{ if((S.tab==='analytics'||S.tab==='dashboard') && MKEY===m){ const y=scrollY; render(); scrollTo(0,y) } });
 }
 function renderAnalytics(){
   const st=AN[MKEY];
@@ -432,21 +432,204 @@ function drawChart(){
 function niceStep(v){ const p=Math.pow(10,Math.floor(Math.log10(Math.max(v,1)))), n=v/p; return (n<=1?1:n<=2?2:n<=5?5:10)*p }
 addEventListener('resize',()=>{ if(S.tab==='analytics') drawChart() });
 
+
+/* ---------- Dashboard: todo el mes en una pantalla ----------
+   Plan = Google Sheet del mes (data*.json). Gasto real = actuals*.json (Meta, TikTok, Google).
+   Web = Google Analytics en vivo (/api/analytics, la misma fuente que Analíticos).
+   Avance = casillas marcadas en este navegador. */
+const PG=[ ['ig','Instagram',p=>p==='Instagram'], ['fb','Facebook',p=>/^FB|Remarketing/.test(p)], ['tt','TikTok',p=>p==='TikTok'], ['go','Google',p=>/Google/.test(p)] ];
+const DS={ seg:null };
+const ICO={
+  money:'<svg viewBox="0 0 16 16"><path d="M8 1.5v13M11 4.5H6.5a2 2 0 0 0 0 4h3a2 2 0 0 1 0 4H5"/></svg>',
+  eye:'<svg viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>',
+  cal:'<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5.5 1.5v3M10.5 1.5v3"/></svg>',
+  tap:'<svg viewBox="0 0 16 16"><path d="M8 14.5a5 5 0 0 0 5-5V8a1.5 1.5 0 0 0-3 0V6.5a1.5 1.5 0 0 0-3 0V2.5a1.5 1.5 0 0 0-3 0V10l-1-1a1.4 1.4 0 0 0-2 2l2.5 2.5"/></svg>',
+  check:'<svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></svg>'};
+function withLoc(loc,fn){ const o=S.loc; S.loc=loc; try{ return fn() } finally { S.loc=o } }
+function planCum(){ const out=[]; let s=0; for(let d=1;d<=NDAYS;d++){ s+=CAMPS.reduce((a,c)=>a+(c.amt[d-1]||0),0); out.push(s) } return out }
+function realTotal(){ return ACTUALS&&ACTUALS.platforms&&ACTUALS.platforms.length ? ACTUALS.platforms.reduce((s,p)=>s+(p.spent||0),0) : null }
+function planBy(test,upto){ return CAMPS.filter(c=>test(c.platform)).reduce((s,c)=>s+c.amt.slice(0,upto).reduce((a,b)=>a+b,0),0) }
+function realOf(re){ const p=(ACTUALS&&ACTUALS.platforms||[]).find(x=>re.test(x.name)); return p?(p.spent||0):null }
+function monthProgress(){
+  return withLoc('all',()=>{ const last=inMonth?TODAY:(now.y*100+now.m>MYEAR*100+MNUM?NDAYS:0); let n=0,t=0; const per=[];
+    for(let d=1;d<=NDAYS;d++){ const p=progress(d); per.push(p); if(d<=last){ n+=p.n; t+=p.total } }
+    return {n,t,pct:t?Math.round(100*n/t):0,per,last} });
+}
+function contentMix(last){
+  const k={feed:[0,0],story:[0,0],email:[0,0],ads:[0,0]};
+  withLoc('all',()=>{ for(let d=1;d<=NDAYS;d++){ dayTasks(d).forEach(t=>{ k[t.kind][0]++; if(d<=last&&done[t.id]) k[t.kind][1]++ }); adTasks(d).forEach(t=>{ k.ads[0]++; if(d<=last&&done[t.id]) k.ads[1]++ }) } });
+  return k;
+}
+function spark(arr){
+  if(!arr||arr.length<2) return '';
+  const W=120,H=28,m=Math.max(1,...arr), x=i=>i*W/(arr.length-1), y=v=>H-2-(H-4)*v/m;
+  const p=arr.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="${p}L${W},${H}L0,${H}Z"/><path d="${p}" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function renderDashboard(){
+  const st=AN[MKEY]; if(!st) loadAN(MKEY);
+  const ga = st&&st.st==='ok' ? st.d : null;
+  const bud=(BUDGET&&BUDGET.monthly)||24000, cum=planCum(), real=realTotal(), th=(ACTUALS&&ACTUALS.through)||0;
+  const mp=monthProgress(), mix=contentMix(mp.last);
+  const pct=real!=null?Math.round(100*real/bud):0, proj=real!=null&&th?real/th*NDAYS:null, planTo=th?cum[th-1]:0;
+  let h=`<div class="dash" style="display:flex;flex-direction:column;gap:22px">`;
+
+  /* 1. hero: presupuesto */
+  const gc = proj==null?'#5b93ff': proj>bud*1.05?'#ff6b6b': proj<bud*0.85?'#ffb547':'#3ed38b';
+  h+=`<section class="dh"><div class="dh-top"><div style="min-width:0"><p class="dh-k">Inversión en anuncios · ${MES}</p>
+    <p class="dh-big num">${real==null?'—':money(real)}<small>de ${money(bud)}</small></p>
+    <p class="dh-s">${real==null?`Todavía no hay gasto real de ${MES}.`:`Al día ${th} de ${NDAYS}. El plan del Sheet iba en ${money(planTo)} (${real>=planTo?'+':'−'}${money(Math.abs(real-planTo))}).`}</p></div>
+    <div class="gauge" style="--p:${Math.min(100,pct)};--gc:${gc}"><i>${pct}%<small>GASTADO</small></i></div></div>
+    <div class="dh-bar" aria-hidden="true"><i style="width:${Math.min(100,pct)}%"></i>${th?`<b style="left:calc(${Math.min(100,100*th/NDAYS)}% - 1px)" title="Día del mes"></b>`:''}</div>
+    <div class="dh-leg"><span>${proj==null?'Sin proyección':`Al ritmo actual cierras en <b style="color:#edf1f8">${money(proj)}</b>`}</span><span><i style="display:inline-block;width:2px;height:10px;background:#e2c07a;vertical-align:-1px;margin-right:5px"></i>día ${th||'—'}</span></div></section>`;
+
+  /* 2. KPIs */
+  const T=ga&&ga.totals, cpr = ga&&real!=null&&ACTUALS.through===ga.through&&ga.events.reserve_click.cur ? real/ga.events.reserve_click.cur : null;
+  const kpi=(ico,lbl,val,foot,sp,tab)=>`<${tab?'button data-tab="'+tab+'"':'div'} class="kpi"><small>${ICO[ico]}${lbl}</small><b class="num">${val}</b><span class="kf num">${foot}</span>${sp||''}</${tab?'button':'div'}>`;
+  const gaWait = !st||st.st==='loading' ? 'Cargando…' : 'Sin conexión a Analytics';
+  h+=`<section class="sec"><h2>Resumen <span>${inMonth?'del 1 a hoy':'mes completo'}</span></h2><div class="kpis">`+
+    kpi('eye','Visitas a la web',T?num(T.cur.sessions):'—',T?`${chg(T.cur.sessions,T.prev.sessions)} vs ${MES_ES[ga.prevMonth]}`:gaWait,T?spark(ga.daily.cur.sessions.slice(0,ga.through)):'','analytics')+
+    kpi('tap','Clics en Reservar',T?num(T.cur.reserves):'—',T?`${chg(T.cur.reserves,T.prev.reserves)} vs ${MES_ES[ga.prevMonth]}`:gaWait,T?spark(ga.daily.cur.reserves.slice(0,ga.through)):'','analytics')+
+    kpi('money','Costo por clic en Reservar',cpr==null?'—':'$'+cpr.toFixed(2),cpr==null?(T?'Falta gasto real del mismo día':gaWait):'gasto real ÷ clics','', 'ads')+
+    kpi('check','Plan cumplido',`${mp.pct}%`,`${mp.n} de ${mp.t} tareas hasta hoy`,`<div class="track" style="margin-top:8px"><i style="width:${mp.pct}%;background:var(--ok)"></i></div>`,'hoy')+
+  `</div></section>`;
+
+  /* 3. insights */
+  const ins=[];
+  if(proj!=null&&th<3) ins.push(['info','i',`Apenas van ${th} ${th===1?'día':'días'} de gasto real; la proyección se vuelve confiable desde el día 3.`]);
+  else if(proj!=null){ const r=proj/bud; ins.push(r>1.05?['bad','!',`Vas rápido: al ritmo de hoy cierras en ${money(proj)}, ${money(proj-bud)} arriba del presupuesto. Baja el gasto diario a ${money(Math.max(0,bud-real)/Math.max(1,NDAYS-th))}.`]: r<0.85?['warn','↓',`Vas lento: proyectas ${money(proj)}. Te quedan ${money(bud-real)} para ${Math.max(1,NDAYS-th)} días (unos ${money((bud-real)/Math.max(1,NDAYS-th))} al día).`]:['ok','✓',`Gasto en ritmo: proyectas ${money(proj)} de ${money(bud)}.`]) }
+  if(T){ const r=pctCh(T.cur.sessions,T.prev.sessions); if(r!=null) ins.push([r>=0?'ok':'warn',r>=0?'▲':'▼',`Visitas ${r>=0?'arriba':'abajo'} ${Math.abs(Math.round(r*100))}% contra los mismos días de ${MES_ES[ga.prevMonth]}.`]);
+    const top=ga.channels.filter(c=>c.cur.reserves).sort((a,b)=>b.cur.reserves-a.cur.reserves)[0]; if(top) ins.push(['info','★',`${chName(top.name)} trae más clics en Reservar: ${num(top.cur.reserves)}.`]) }
+  if(mp.last){ const late=mp.per.slice(0,mp.last-(inMonth?1:0)).filter(p=>p.total&&p.pct<50).length; if(late) ins.push(['warn','✎',`${late} ${late===1?'día quedó':'días quedaron'} con menos de la mitad del plan marcado. Revisa el mapa de abajo.`]) }
+  if(ins.length) h+=`<section class="sec"><h2>Lo que dice el tablero</h2><div class="group ins">${ins.map(i=>`<p><span class="ic ${i[0]}">${i[1]}</span><span>${esc(i[2])}</span></p>`).join('')}</div></section>`;
+
+  /* 4. ritmo de gasto */
+  h+=`<section class="sec"><h2>Ritmo de gasto <span>plan acumulado vs real</span></h2><div class="group dchart"><div class="lg2"><span><i class="ln"></i>Plan del Sheet</span><span><i class="ln g"></i>Presupuesto</span>${real!=null?'<span><i class="dt"></i>Gastado real</span><span><i class="ln p"></i>Proyección</span>':''}</div><div id="dspend"></div><div class="dtip" id="dspendt" hidden></div></div>
+    <details class="more"><summary>Ver como tabla</summary><div class="group scroll-x" style="margin-top:8px"><table class="thr" style="min-width:0"><thead><tr><th>Día</th><th>Plan del día</th><th>Plan acumulado</th></tr></thead><tbody>${cum.map((v,i)=>`<tr><td>${i+1}</td><td class="num">${money(v-(i?cum[i-1]:0))}</td><td class="num">${money(v)}</td></tr>`).join('')}</tbody></table></div></details></section>`;
+
+  /* 5. dónde va el dinero */
+  const pl=PG.map(([k,n,t])=>({k,n,v:planBy(t,NDAYS)})), ptot=pl.reduce((s,x)=>s+x.v,0);
+  h+=`<section class="sec"><h2>Dónde va el dinero <span>plan de ${MES}</span></h2><div class="group"><div class="donut-w ${DS.seg?'hl':''}" id="donut">${donut(pl,ptot)}<div class="dl2">${pl.map(x=>`<button data-dseg="${x.k}" aria-pressed="${DS.seg===x.k}"><span class="sw2" style="background:var(--p-${x.k})"></span><span class="n">${x.n}</span><span class="v"><b>${money(x.v)}</b>${Math.round(100*x.v/ptot)}%</span></button>`).join('')}</div></div></div></section>`;
+
+  /* 6. plan vs real por plataforma */
+  if(real!=null&&th){
+    const rows=[['Meta',/Meta/,p=>/Instagram|^FB|Remarketing/.test(p),'fb','Instagram + Facebook'],['TikTok',/TikTok/,p=>p==='TikTok','tt',''],['Google',/Google/,p=>/Google/.test(p),'go','Search + PMax']];
+    const mx=Math.max(1,...rows.map(r=>Math.max(planBy(r[2],th),realOf(r[1])||0)));
+    h+=`<section class="sec"><h2>Plan vs real <span>del 1 al ${th}</span></h2><div class="group">`+rows.map(([n,re,t,k,sub])=>{ const p=planBy(t,th), r=realOf(re); const d=r==null?null:r-p;
+      return `<div class="pvr"><div class="row"><span><span class="sw2" style="background:var(--p-${k});margin-right:8px;vertical-align:-1px"></span>${n}${sub?` <span style="color:var(--fg3);font-weight:500;font-size:12px">${sub}</span>`:''}</span><span class="num">${d==null?'—':`<span class="chg ${Math.abs(d)<p*0.05?'flat':d>0?'down':'up'}">${d>=0?'+':'−'}${money(Math.abs(d))}</span> vs plan`}</span></div>
+      <div class="bars2"><div class="b2"><span>Plan</span><div class="tr"><i class="pln" style="width:${100*p/mx}%"></i></div><b>${money(p)}</b></div><div class="b2"><span>Real</span><div class="tr"><i style="width:${100*(r||0)/mx}%;background:var(--p-${k})"></i></div><b>${r==null?'—':money(r)}</b></div></div></div>` }).join('')+`</div><p class="note">Real según ${esc(ACTUALS.updated)}. Rojo = gastaste más que el plan; verde = menos.</p></section>`;
+  }
+
+  /* 7. visitas por día (GA) */
+  if(ga){
+    h+=`<section class="sec"><h2>Visitas por día <span>${cap1(MES)} vs ${cap1(MES_ES[ga.prevMonth])}</span></h2><div class="group dchart"><div class="lg2"><span><i class="sw2" style="background:var(--c-cur)"></i>${cap1(MES)}</span><span><i class="ln pv"></i>${cap1(MES_ES[ga.prevMonth])}</span></div><div id="dvis"></div><div class="dtip" id="dvist" hidden></div></div></section>`;
+    const ch=ga.channels.filter(c=>c.cur.sessions).slice(0,6), mc=Math.max(1,...ch.map(c=>c.cur.sessions)), tot=ch.reduce((s,c)=>s+c.cur.sessions,0)||1;
+    h+=`<section class="sec"><h2>De dónde llega la gente <span>visitas</span></h2><div class="group">`+ch.map(c=>`<button class="hbar" data-tab="analytics"><div class="row"><span>${esc(chName(c.name))}</span><span class="num">${num(c.cur.sessions)} · ${Math.round(100*c.cur.sessions/T.cur.sessions)}%</span></div><div class="tr"><i style="width:${100*c.cur.sessions/mc}%"></i></div><small>${num(c.cur.reserves)} clics en Reservar · ${chg(c.cur.sessions,c.prev.sessions)}</small></button>`).join('')+`</div></section>`;
+  } else if(st&&st.st==='err'){
+    h+=`<section class="sec"><h2>Web</h2><div class="group"><div class="empty-s">${esc((st.d&&st.d.error)||'No se pudo leer Google Analytics.')} <button class="linkbtn" data-anreload="1">Intentar otra vez</button></div></div></section>`;
+  }
+
+  /* 8. por sucursal (plan) */
+  const LS=[['SA','San Antonio'],['PLANO','Plano'],['IRVING','Irving'],['DFW','Plano + Irving (compartido)'],['ALL','Las 3 sucursales']];
+  const bl=LS.map(([t,n])=>({n,v:CAMPS.filter(c=>campTag(c)===t).reduce((s,c)=>s+c.amt.reduce((a,b)=>a+b,0),0)})).filter(x=>x.v), ml=Math.max(1,...bl.map(x=>x.v));
+  const sa=bl.find(x=>x.n==='San Antonio')?.v||0, dfw=bl.filter(x=>/Plano|Irving/.test(x.n)).reduce((s,x)=>s+x.v,0);
+  h+=`<section class="sec"><h2>Por sucursal <span>plan · DFW ${Math.round(100*dfw/Math.max(1,sa+dfw))}% / SA ${Math.round(100*sa/Math.max(1,sa+dfw))}%</span></h2><div class="group">`+bl.map(x=>`<div class="hbar"><div class="row"><span>${x.n}</span><span class="num">${money(x.v)} · ${Math.round(100*x.v/ptot)}%</span></div><div class="tr"><i style="width:${100*x.v/ml}%"></i></div></div>`).join('')+`</div></section>`;
+
+  /* 9. contenido */
+  const mk=(l,a)=>`<div class="kpi"><small>${l}</small><b class="num">${a[1]}<span style="font-size:13px;color:var(--fg3);font-weight:500">/${a[0]}</span></b><div class="tr"><i style="width:${a[0]?100*a[1]/a[0]:0}%"></i></div></div>`;
+  h+=`<section class="sec"><h2>Contenido del mes <span>hechos / planeados</span></h2><div class="mix">${mk('Reels y posts',mix.feed)}${mk('Stories',mix.story)}${mk('Emails',mix.email)}${mk('Cambios de anuncios',mix.ads)}</div></section>`;
+
+  /* 10. mapa de avance */
+  let hm=`<div class="heat">`+DOW3.map(x=>`<div class="dow">${x}</div>`).join('');
+  for(let i=0;i<dow(1);i++) hm+=`<div class="hc empty"></div>`;
+  for(let d=1;d<=NDAYS;d++){ const p=mp.per[d-1], fut=d>mp.last;
+    const a=fut?0:Math.round(12+0.88*p.pct); const bg=fut?'':`background:color-mix(in srgb,var(--ok) ${p.pct?a:0}%,var(--surface2));${p.pct>55?'color:#fff':''}`;
+    hm+=`<button class="hc ${fut?'fut':''} ${inMonth&&d===TODAY?'td':''}" data-go="${d}" style="${bg}" aria-label="${dayLabel(d)}: ${fut?'por venir':p.pct+'% hecho'}">${d}${fut?'':`<small>${p.pct}%</small>`}</button>` }
+  hm+=`</div><div class="heat-leg"><span>0%</span>${[0,25,50,75,100].map(v=>`<i style="background:color-mix(in srgb,var(--ok) ${v?Math.round(12+.88*v):0}%,var(--surface2))"></i>`).join('')}<span>100%</span><span style="margin-left:auto">Toca un día para abrirlo</span></div>`;
+  h+=`<section class="sec"><h2>Mapa de avance <span>% del plan marcado</span></h2><div class="group">${hm}</div><p class="note">Las casillas se guardan en este navegador. En otro dispositivo el avance sale vacío.</p></section>`;
+
+  const age=st&&st.at?Math.round((Date.now()-st.at)/60000):null;
+  h+=`<p class="note">Fuentes: plan del Google Sheet de ${MES}; gasto real de Meta, TikTok y Google (${ACTUALS&&ACTUALS.updated?esc(ACTUALS.updated):'sin datos'}); web de Google Analytics${age!=null&&ga?` (leído ${age<1?'hace un momento':'hace '+age+' min'})`:''}. <button class="linkbtn" data-anreload="1">Actualizar</button></p>`;
+  return h+`</div>`;
+}
+
+function donut(pl,tot){
+  const R=64,r=40,C=68; let a0=-Math.PI/2, out='';
+  const pt=(a,rad)=>[C+rad*Math.cos(a),C+rad*Math.sin(a)];
+  pl.forEach(x=>{ if(!x.v) return; const a1=a0+2*Math.PI*x.v/tot, lg=a1-a0>Math.PI?1:0;
+    const [x1,y1]=pt(a0,R),[x2,y2]=pt(a1,R),[x3,y3]=pt(a1,r),[x4,y4]=pt(a0,r);
+    out+=`<path class="${DS.seg===x.k?'on':''}" data-dseg="${x.k}" d="M${x1},${y1}A${R},${R} 0 ${lg} 1 ${x2},${y2}L${x3},${y3}A${r},${r} 0 ${lg} 0 ${x4},${y4}Z" fill="var(--p-${x.k})" stroke="var(--surface)" stroke-width="2"><title>${x.n}: ${money(x.v)} (${Math.round(100*x.v/tot)}%)</title></path>`; a0=a1 });
+  const s=DS.seg&&pl.find(x=>x.k===DS.seg);
+  return `<svg viewBox="0 0 136 136" role="img" aria-label="Plan de inversión por plataforma">${out}<text x="68" y="68" text-anchor="middle" class="c1">${money(s?s.v:tot)}</text><text x="68" y="84" text-anchor="middle" class="c2">${s?s.n.toUpperCase():'TOTAL'}</text></svg>`;
+}
+
+function tipAt(tip,box,xpx,html){ tip.hidden=false; tip.innerHTML=html; const W=box.clientWidth; tip.style.left=Math.min(Math.max(xpx-tip.offsetWidth/2+10,4),W-tip.offsetWidth+16)+'px' }
+function drawDashSpend(){
+  const box=document.getElementById('dspend'); if(!box) return;
+  const tip=document.getElementById('dspendt'), cum=planCum(), N=NDAYS, bud=(BUDGET&&BUDGET.monthly)||24000, real=realTotal(), th=(ACTUALS&&ACTUALS.through)||0;
+  const proj=real!=null&&th?real/th*N:null;
+  const W=box.clientWidth||340, H=210, L=46, Rm=10, Tm=12, B=22;
+  const top0=Math.max(cum[N-1],bud,proj||0,real||0)*1.08, step=niceStep(top0/4), top=Math.ceil(top0/step)*step;
+  const x=i=>L+i*(W-L-Rm)/(N-1), y=v=>Tm+(H-Tm-B)*(1-v/top);
+  const kfmt=v=>v>=1000?'$'+(v/1000).toFixed(v%1000?1:0)+'k':'$'+v;
+  let g=`<defs><linearGradient id="dgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".22"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>`;
+  for(let v=0;v<=top+1e-9;v+=step) g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${L-6}" y="${y(v)+4}" class="ax" text-anchor="end">${kfmt(v)}</text>`;
+  [1,8,15,22,N].forEach(dd=>g+=`<text x="${x(dd-1)}" y="${H-5}" class="ax" text-anchor="middle">${dd}</text>`);
+  const p=cum.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  g+=`<path d="${p}L${x(N-1)},${y(0)}L${x(0)},${y(0)}Z" class="planar"/><path d="${p}" class="plan"/>`;
+  g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(bud)}" y2="${y(bud)}" class="bud"/><text x="${W-Rm}" y="${y(bud)-6}" class="lbl" text-anchor="end">Presupuesto ${money(bud)}</text>`;
+  if(inMonth) g+=`<line x1="${x(TODAY-1)}" x2="${x(TODAY-1)}" y1="${Tm}" y2="${H-B}" class="today"/><text x="${x(TODAY-1)}" y="${Tm-2}" class="ax" text-anchor="middle">hoy</text>`;
+  if(real!=null&&th){ g+=`<line x1="${x(th-1)}" y1="${y(real)}" x2="${x(N-1)}" y2="${y(proj)}" class="proj"/><circle cx="${x(th-1)}" cy="${y(real)}" r="5.5" class="real ${proj>bud*1.05?'realbad':''}"/>`;
+    const lx=x(th-1), anchor=lx>W*0.7?'end':'start'; g+=`<text x="${lx+(anchor==='end'?-9:9)}" y="${y(real)+(y(real)<Tm+20?16:-8)}" class="lbl" text-anchor="${anchor}">${money(real)}</text>` }
+  g+=`<line id="dsx" class="xh" y1="${Tm}" y2="${H-B}" x1="-10" x2="-10"/><circle id="dsc" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2" cx="-10" cy="-10"/>`;
+  box.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gasto acumulado planeado por día contra el presupuesto">${g}<rect class="hit" x="${L}" y="0" width="${W-L-Rm}" height="${H}"/></svg>`;
+  const svg=box.firstElementChild;
+  const show=ev=>{ const r=svg.getBoundingClientRect(), i=Math.max(0,Math.min(N-1,Math.round((ev.clientX-r.left-L)/((W-L-Rm)/(N-1)))));
+    svg.querySelector('#dsx').setAttribute('x1',x(i)); svg.querySelector('#dsx').setAttribute('x2',x(i)); const c=svg.querySelector('#dsc'); c.setAttribute('cx',x(i)); c.setAttribute('cy',y(cum[i]));
+    const day=cum[i]-(i?cum[i-1]:0);
+    tipAt(tip,box,x(i),`<b>${cap1(dayLabel(i+1))}</b><span><i class="sw2" style="background:var(--accent)"></i>Plan acumulado <b>${money(cum[i])}</b></span><span>Plan de ese día <b>${money(day)}</b></span>${real!=null&&i+1===th?`<span><i class="sw2" style="background:var(--ok);border-radius:50%"></i>Gastado real <b>${money(real)}</b></span>`:''}${proj!=null&&i===N-1?`<span>Proyección <b>${money(proj)}</b></span>`:''}`) };
+  svg.addEventListener('pointermove',show); svg.addEventListener('pointerdown',show);
+  svg.addEventListener('pointerleave',()=>{ tip.hidden=true; ['x1','x2'].forEach(a=>svg.querySelector('#dsx').setAttribute(a,-10)); svg.querySelector('#dsc').setAttribute('cx',-10) });
+}
+function drawDashVisits(){
+  const box=document.getElementById('dvis'), st=AN[MKEY]; if(!box||!st||st.st!=='ok') return;
+  const tip=document.getElementById('dvist'), d=st.d, N=d.ndays, cur=d.daily.cur.sessions.slice(0,d.through), prev=d.daily.prev.sessions.slice(0,N);
+  const W=box.clientWidth||340, H=180, L=40, Rm=8, Tm=10, B=22, bw=(W-L-Rm)/N;
+  const mx=Math.max(1,...cur,...prev), step=niceStep(mx/3), top=Math.ceil(mx/step)*step, y=v=>Tm+(H-Tm-B)*(1-v/top), cx=i=>L+bw*i+bw/2;
+  let g=''; for(let v=0;v<=top+1e-9;v+=step) g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${L-6}" y="${y(v)+4}" class="ax" text-anchor="end">${num(v)}</text>`;
+  [1,8,15,22,N].forEach(dd=>g+=`<text x="${cx(dd-1)}" y="${H-5}" class="ax" text-anchor="middle">${dd}</text>`);
+  const w=Math.max(2,Math.min(14,bw-2));
+  cur.forEach((v,i)=>{ if(!v) return; const yy=y(v), hh=y(0)-yy, rr=Math.min(4,w/2,hh); g+=`<path class="bar ${d.current&&i===d.through-1?'inc':''}" d="M${cx(i)-w/2},${y(0)}V${yy+rr}Q${cx(i)-w/2},${yy} ${cx(i)-w/2+rr},${yy}H${cx(i)+w/2-rr}Q${cx(i)+w/2},${yy} ${cx(i)+w/2},${yy+rr}V${y(0)}Z"/>` });
+  g+=`<path class="pl" d="${prev.map((v,i)=>`${i?'L':'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`).join('')}"/>`;
+  g+=`<line id="dvx" class="xh" y1="${Tm}" y2="${H-B}" x1="-10" x2="-10"/>`;
+  box.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Visitas por día a brasaousa.com">${g}<rect class="hit" x="${L}" y="0" width="${W-L-Rm}" height="${H}"/></svg>`;
+  const svg=box.firstElementChild, P=cap1(MES_ES[d.prevMonth]);
+  const show=ev=>{ const r=svg.getBoundingClientRect(), i=Math.max(0,Math.min(N-1,Math.floor((ev.clientX-r.left-L)/bw)));
+    ['x1','x2'].forEach(a=>svg.querySelector('#dvx').setAttribute(a,cx(i)));
+    tipAt(tip,box,cx(i),`<b>Día ${i+1}</b><span><i class="sw2" style="background:var(--c-cur)"></i>${cap1(MES)} <b>${i<cur.length?num(cur[i]):'—'}</b>${d.current&&i===d.through-1?' (incompleto)':''}</span><span><i class="sw2" style="background:var(--c-prev)"></i>${P} <b>${i<prev.length?num(prev[i]):'—'}</b></span>`) };
+  svg.addEventListener('pointermove',show); svg.addEventListener('pointerdown',show);
+  svg.addEventListener('pointerleave',()=>{ tip.hidden=true; ['x1','x2'].forEach(a=>svg.querySelector('#dvx').setAttribute(a,-10)) });
+}
+function drawDash(){ drawDashSpend(); drawDashVisits() }
+addEventListener('resize',()=>{ if(S.tab==='dashboard') drawDash() });
+
 /* ---------- shell ---------- */
 const ICONS={
+  dashboard:'<svg viewBox="0 0 26 26"><rect x="4" y="4" width="8" height="10" rx="2"/><rect x="14" y="4" width="8" height="6" rx="2"/><rect x="14" y="12" width="8" height="10" rx="2"/><rect x="4" y="16" width="8" height="6" rx="2"/></svg>',
   hoy:'<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="9"/><path d="M13 8v5l3.5 2"/></svg>',
   semana:'<svg viewBox="0 0 26 26"><rect x="4" y="5.5" width="18" height="16" rx="3"/><path d="M4 11h18M9 3.5v4M17 3.5v4"/></svg>',
   ads:'<svg viewBox="0 0 26 26"><path d="M4 20V13M10 20V7M16 20v-9M22 20V4"/></svg>',
   guia:'<svg viewBox="0 0 26 26"><path d="M5 5.5A2.5 2.5 0 0 1 7.500 3H21v17H7.500A2.500 2.500 0 0 0 5 22.500z"/><path d="M5 5.500V22.500M10 8h7"/></svg>',
   analytics:'<svg viewBox="0 0 26 26"><path d="M4 21h18"/><path d="M5 16l5-5 4 3 7-8"/><path d="M17 6h4v4"/></svg>'};
-const TABS=[['hoy','Hoy'],['semana','Semana'],['ads','Anuncios'],['analytics','Analíticos'],['guia','Guía']];
+const TABS=[['dashboard','Dashboard'],['hoy','Hoy'],['semana','Semana'],['ads','Anuncios'],['analytics','Analíticos'],['guia','Guía']];
 function renderBar(){
   let h='';
   if(S.tab==='hoy'){
     h+=`<div class="title-row"><div><h1 class="large">${S.day===TODAY&&inMonth?'Hoy':cap1(DOW[dow(S.day)])}</h1><p class="sub">${cap1(dayLabel(S.day))}</p></div>
       <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=NDAYS?'disabled':''}>›</button></div></div>`;
   } else {
-    const t={semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],analytics:['Analíticos',`Google Analytics · ${MES} contra ${MES_ES[prevM(MNUM)]}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
+    const t={dashboard:['Dashboard',`Todo ${MES} de un vistazo`],semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],analytics:['Analíticos',`Google Analytics · ${MES} contra ${MES_ES[prevM(MNUM)]}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
     h+=`<div class="title-row"><div><h1 class="large">${t[0]}</h1><p class="sub">${t[1]}</p></div></div>`;
   }
   if(S.tab==='hoy'||S.tab==='ads') h+=`<div class="seg" role="group" aria-label="Sucursal">`+LOCS.map(l=>`<button data-loc="${l[0]}" aria-pressed="${S.loc===l[0]}">${l[1]}</button>`).join('')+`</div>`;
@@ -459,8 +642,9 @@ function renderMonths(){
 }
 function render(){
   CLIPS=[]; renderMonths(); renderBar();
-  $('#view').innerHTML = S.tab==='hoy'?renderHoy():S.tab==='semana'?renderSemana():S.tab==='ads'?renderAds():S.tab==='analytics'?renderAnalytics():renderGuia();
+  $('#view').innerHTML = S.tab==='dashboard'?renderDashboard():S.tab==='hoy'?renderHoy():S.tab==='semana'?renderSemana():S.tab==='ads'?renderAds():S.tab==='analytics'?renderAnalytics():renderGuia();
   if(S.tab==='analytics') drawChart();
+  if(S.tab==='dashboard') drawDash();
   $('#tabs').innerHTML=TABS.map(t=>`<button data-tab="${t[0]}" ${S.tab===t[0]?'aria-current="page"':''}>${ICONS[t[0]]}<span>${t[1]}</span></button>`).join('');
   document.title='Plan Diario Brasão';
 }
@@ -482,7 +666,9 @@ document.addEventListener('click',e=>{
   if(b.dataset.go){ S.day=+b.dataset.go; S.tab='hoy'; render(); scrollTo(0,0); return }
   if(b.dataset.anm){ ANS.metric=b.dataset.anm; const y=scrollY; render(); scrollTo(0,y); return }
   if(b.dataset.anreload){ loadAN(MKEY,true); const y=scrollY; render(); scrollTo(0,y); return }
+  if(b.dataset.dseg){ DS.seg=DS.seg===b.dataset.dseg?null:b.dataset.dseg; const y=scrollY; render(); scrollTo(0,y); return }
   if(b.dataset.plat){ S.plat=b.dataset.plat; const y=scrollY; render(); scrollTo(0,y); return }
 });
+document.addEventListener('click',e=>{ const p=e.target.closest('path[data-dseg]'); if(!p) return; DS.seg=DS.seg===p.dataset.dseg?null:p.dataset.dseg; const y=scrollY; render(); scrollTo(0,y) });
 addEventListener('scroll',()=>$('#bar').classList.toggle('scrolled',scrollY>8),{passive:true});
 render();

@@ -28,3 +28,6 @@ Arriba hay un selector de mes. Cada mes tiene sus propios archivos:
 La pestaña Analíticos llama a `/api/analytics?m=<mes>` (función de Netlify en `netlify/functions/analytics.mjs`).
 La función lee GA4 (propiedad 340318548, www.brasaousa.com) con una cuenta de servicio de solo lectura y compara 1 → hoy contra los mismos días del mes anterior. Cache de 10 min.
 Variables de entorno en Netlify (alcance Functions): `GA_CLIENT_EMAIL`, `GA_PRIVATE_KEY` (y opcional `GA_PROPERTY_ID`).
+
+## Dashboard (primera pestaña)
+Abre por defecto. Junta todo el mes: gasto real contra presupuesto (con proyección), visitas, clics en Reservar y costo por clic (Google Analytics vía `/api/analytics`), insights automáticos, ritmo de gasto (plan acumulado), reparto por plataforma y por sucursal, plan contra real, visitas por día, canales, contenido hecho/planeado y mapa de avance diario. Código en `renderDashboard()` y `drawDash()` de `src/app.js`; estilos en el bloque "Dashboard" de `src/head.html`.

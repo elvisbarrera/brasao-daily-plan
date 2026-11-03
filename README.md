@@ -35,5 +35,6 @@ Abre por defecto. Junta todo el mes: gasto real contra presupuesto (con proyecci
 ## Botón Actualizar (gasto en vivo)
 En Dashboard y Anuncios. Llama `/api/spend` (`netlify/functions/spend.mjs`) y vuelve a leer `/api/analytics`.
 - Meta y TikTok: APIs oficiales con llaves de solo lectura (no inicia sesión como usuario). Variables en Netlify (Functions): `META_TOKEN` (System User, `ads_read`), opcional `META_AD_ACCOUNTS`; `TIKTOK_TOKEN` (Marketing API), opcional `TIKTOK_ADVERTISER_ID` (por defecto 6988573869539852289).
+- TikTok sin copiar tokens: con la app "Brasao Dashboard" aprobada en TikTok for Business, pon `TIKTOK_APP_ID` y `TIKTOK_APP_SECRET` en Netlify, haz deploy y abre `/api/tiktok-connect`. `netlify/functions/tiktok-callback.mjs` guarda el token en Netlify Blobs y `/api/spend` lo lee de ahí.
 - Google Ads: costo que ya trae Google Analytics.
 - Si falta una llave, esa plataforma usa el último gasto guardado (`actuals*.json`) y la sección Conexiones del Dashboard dice "Falta llave".

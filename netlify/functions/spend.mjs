@@ -10,6 +10,8 @@
      TIKTOK_ADVERTISER_ID opcional, por defecto 6988573869539852289 (Brasão Brazilian Steakhouse)
    Si falta la llave de una plataforma, esa plataforma regresa {status:"setup"} y la app usa el último gasto guardado. */
 
+import { getStore } from "@netlify/blobs";
+
 const TZ = "America/Chicago";
 const pad = (n) => String(n).padStart(2, "0");
 const iso = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
@@ -111,10 +113,13 @@ export default async (req) => {
   const R = range(y, m, t);
   if (!R) return json({ ok: false, code: "future", error: "Ese mes todavía no empieza." });
   const env = (k) => (globalThis.Netlify ? Netlify.env.get(k) : process.env[k]);
-  const mt = env("META_TOKEN"), tt = env("TIKTOK_TOKEN");
+  const mt = env("META_TOKEN");
+  /* TikTok: variable de entorno, o el token que guardó /api/tiktok-callback en Netlify Blobs */
+  let tt = env("TIKTOK_TOKEN"), ttAdv = env("TIKTOK_ADVERTISER_ID");
+  if (!tt) { try { const b = await getStore("tokens").get("tiktok", { type: "json" }); if (b) { tt = b.access_token; if (!ttAdv && b.advertiser_ids && b.advertiser_ids.includes("6988573869539852289")) ttAdv = "6988573869539852289"; } } catch (e) {} }
   const [metaR, ttR] = await Promise.all([
     mt ? run(() => meta(mt, env("META_AD_ACCOUNTS"), R)) : { status: "setup", error: "Falta META_TOKEN en Netlify." },
-    tt ? run(() => tiktok(tt, env("TIKTOK_ADVERTISER_ID") || "6988573869539852289", R)) : { status: "setup", error: "Falta TIKTOK_TOKEN en Netlify." },
+    tt ? run(() => tiktok(tt, ttAdv || "6988573869539852289", R)) : { status: "setup", error: "Falta conectar TikTok (abre /api/tiktok-connect cuando la app esté aprobada)." },
   ]);
   return json({ ok: true, generated: new Date().toISOString(), year: y, month: m, ...R, meta: metaR, tiktok: ttR });
 };

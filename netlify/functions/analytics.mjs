@@ -219,13 +219,15 @@ export default async (req) => {
     const [a, b, ads] = await Promise.all([
       batch(token, prop, requestsFor(R)),
       batch(token, prop, requestsFor2(R)),
-      batch(token, prop, adsRequest(R)).catch(() => null),
+      batch(token, prop, adsRequest(R)).catch((e) => ({ error: e.message })),
     ]);
     const data = shape([...a, ...b], R);
-    if (ads && ads[0]) {
+    if (ads && ads.error) { data.googleAds = null; data.googleAdsError = ads.error; }
+    else if (ads && ads[0]) {
       const G = { cur: { clicks: 0, cost: 0, impressions: 0 }, prev: { clicks: 0, cost: 0, impressions: 0 } };
       rowsOf(ads[0]).forEach((o) => { const k = which(o); G[k].clicks += o.advertiserAdClicks; G[k].cost += o.advertiserAdCost; G[k].impressions += o.advertiserAdImpressions; });
       data.googleAds = (G.cur.clicks || G.prev.clicks || G.cur.cost || G.prev.cost) ? G : null;
+      if (!data.googleAds) data.googleAdsError = `GA4 devolvió el costo de Google Ads en 0 (${(ads[0].rows||[]).length} filas).`;
     } else data.googleAds = null;
     return json({ ok: true, property: prop, generated: new Date().toISOString(), year: y, month: m, ...R, ...data });
   } catch (e) {

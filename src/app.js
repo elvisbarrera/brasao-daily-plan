@@ -461,7 +461,7 @@ function applyLive(m){
   if(Ld){ if(Ld.meta.status==='ok'){ put(/Meta/,'Meta · Instagram + Facebook',{spent:Ld.meta.spent,campaigns:Ld.meta.campaigns,note:`En vivo desde Meta Ads (${Ld.meta.accounts} ${Ld.meta.accounts===1?'cuenta':'cuentas'}).`}); live.push('Meta') }
           if(Ld.tiktok.status==='ok'){ put(/TikTok/,'TikTok',{spent:Ld.tiktok.spent,campaigns:Ld.tiktok.campaigns,note:'En vivo desde TikTok Ads.'}); live.push('TikTok') }
           if(live.length){ th=Ld.through; at=L.at } }
-  if(ga&&ga.googleAds){ put(/Google/,'Google Ads',{spent:ga.googleAds.cur.cost,campaigns:[],note:'En vivo: costo de Google Ads ligado a Google Analytics (puede ir unas horas atrás).'}); live.push('Google'); th=Math.max(th,ga.through); at=Math.max(at,AN[m].at) }
+  if(ga&&ga.googleAds){ put(/Google/,'Google Ads',{spent:ga.googleAds.cur.cost,campaigns:ga.googleAds.campaigns||[],note:'En vivo: costo de Google Ads ligado a Google Analytics (puede ir unas horas atrás).'}); live.push('Google'); th=Math.max(th,ga.through); at=Math.max(at,AN[m].at) }
   if(!live.length){ ACTUALS=MONTHS[m].actuals; return }
   const stale=plats.filter(p=>!p.live).map(p=>{ p.note=(p.note?p.note+' ':'')+`Guardado: ${String(base.updated||'').split('·')[0].trim()}.`; return p.name.split(' ·')[0] });
   ACTUALS={...base, platforms:plats, through:th, live,

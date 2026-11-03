@@ -188,7 +188,7 @@ function requestsFor2(R) {
 }
 /* Google Ads (solo si la cuenta está ligada a GA4). Va aparte: si falla, lo demás sigue. */
 function adsRequest(R) {
-  return [{ dateRanges: [R.cur, R.prev], metrics: [{ name: "advertiserAdClicks" }, { name: "advertiserAdCost" }, { name: "advertiserAdImpressions" }] }];
+  return [{ dateRanges: [R.cur, R.prev], dimensions: [{ name: "sessionCampaignName" }], metrics: [{ name: "advertiserAdClicks" }, { name: "advertiserAdCost" }, { name: "advertiserAdImpressions" }], limit: 200 }];
 }
 
 const json = (body, status = 200, cache = true) => new Response(JSON.stringify(body), {
@@ -224,8 +224,11 @@ export default async (req) => {
     const data = shape([...a, ...b], R);
     if (ads && ads.error) { data.googleAds = null; data.googleAdsError = ads.error; }
     else if (ads && ads[0]) {
-      const G = { cur: { clicks: 0, cost: 0, impressions: 0 }, prev: { clicks: 0, cost: 0, impressions: 0 } };
-      rowsOf(ads[0]).forEach((o) => { const k = which(o); G[k].clicks += o.advertiserAdClicks; G[k].cost += o.advertiserAdCost; G[k].impressions += o.advertiserAdImpressions; });
+      const G = { cur: { clicks: 0, cost: 0, impressions: 0 }, prev: { clicks: 0, cost: 0, impressions: 0 }, campaigns: [] };
+      const byC = new Map();
+      rowsOf(ads[0]).forEach((o) => { const k = which(o); G[k].clicks += o.advertiserAdClicks; G[k].cost += o.advertiserAdCost; G[k].impressions += o.advertiserAdImpressions;
+        if (k === "cur" && o.advertiserAdCost > 0) byC.set(o.sessionCampaignName, (byC.get(o.sessionCampaignName) || 0) + o.advertiserAdCost); });
+      G.campaigns = [...byC].map(([name, spent]) => ({ name, spent: Math.round(spent * 100) / 100 })).sort((a, b) => b.spent - a.spent);
       data.googleAds = (G.cur.clicks || G.prev.clicks || G.cur.cost || G.prev.cost) ? G : null;
       if (!data.googleAds) data.googleAdsError = `GA4 devolvió el costo de Google Ads en 0 (${(ads[0].rows||[]).length} filas).`;
     } else data.googleAds = null;

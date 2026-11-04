@@ -683,7 +683,7 @@ function renderBar(){
       <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=NDAYS?'disabled':''}>›</button></div></div>`;
   } else {
     const t={dashboard:['Dashboard',`Todo ${MES} de un vistazo`],semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],analytics:['Analíticos',`Google Analytics · ${MES} contra ${MES_ES[prevM(MNUM)]}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
-    const rfb=(S.tab==='dashboard'||S.tab==='ads')?`<button class="rf ${busy()?'busy':''}" data-refresh="1" aria-label="Actualizar gasto y analíticos" ${busy()?'aria-busy="true"':''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg><span>${busy()?'Actualizando':'Actualizar'}</span></button>`:'';
+    const rfb=(S.tab==='dashboard'||S.tab==='ads')?`<button class="rf ${busy()?'busy':''}" data-refresh="1" aria-label="Actualizar gasto y analíticos" title="Actualizar" ${busy()?'aria-busy="true"':''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>`:'';
     const sub2=(S.tab==='dashboard'||S.tab==='ads')&&ACTUALS&&ACTUALS.updated?`${t[1]} · gasto ${esc(ACTUALS.updated.split(' · ')[0])}`:t[1];
     h+=`<div class="title-row"><div style="min-width:0"><h1 class="large">${t[0]}</h1><p class="sub">${sub2}</p></div>${rfb}</div>`;
   }

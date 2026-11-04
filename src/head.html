@@ -371,9 +371,10 @@ button.kpi:active{transform:scale(.98)}
 @media (prefers-reduced-motion:reduce){.dash>*{animation:none}}
 
 /* refresh + conexiones */
-.rf{flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px 0 11px;border-radius:18px;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:14px;box-shadow:0 4px 14px var(--glow)}
-.rf svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.rf.busy{opacity:.85;cursor:progress}.rf.busy svg{animation:spin .9s linear infinite}
+.rf{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--line);color:var(--fg2);transition:color .15s,background .15s}
+.rf:hover{color:var(--accent)}.rf:active{background:var(--surface2)}
+.rf svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.rf.busy{color:var(--accent);cursor:progress}.rf.busy svg{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.rf.busy svg{animation:none}}
 .conn{display:flex;align-items:center;gap:10px;padding:11px 14px}

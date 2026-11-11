@@ -463,9 +463,9 @@ function applyLive(m){
           if(live.length){ th=Ld.through; at=L.at } }
   if(ga&&ga.googleAds){ put(/Google/,'Google Ads',{spent:ga.googleAds.cur.cost,campaigns:ga.googleAds.campaigns||[],note:'En vivo: costo de Google Ads ligado a Google Analytics (puede ir unas horas atrás).'}); live.push('Google'); th=Math.max(th,ga.through); at=Math.max(at,AN[m].at) }
   if(!live.length){ ACTUALS=MONTHS[m].actuals; return }
-  const stale=plats.filter(p=>!p.live).map(p=>{ p.note=(p.note?p.note+' ':'')+`Guardado: ${String(base.updated||'').split('·')[0].trim()}.`; return p.name.split(' ·')[0] });
+  const stale=plats.filter(p=>!p.live).map(p=>{ const g=p.asOf||String(base.updated||'').split('·')[0].trim(); p.note=(p.note?p.note+' ':'')+`Guardado: ${g}.`; return p.name.split(' ·')[0]+' '+g });
   ACTUALS={...base, platforms:plats, through:th, live,
-    updated:`en vivo ${hhmm(at)} (${live.join(', ')})`+(stale.length?` · ${stale.join(', ')} guardado ${String(base.updated||'').split('·')[0].trim()}`:'')};
+    updated:`en vivo ${hhmm(at)} (${live.join(', ')})`+(stale.length?` · guardado: ${stale.join(', ')}`:'')};
 }
 function refreshAll(){
   RF.pending=2; render();

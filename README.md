@@ -32,9 +32,9 @@ Variables de entorno en Netlify (alcance Functions): `GA_CLIENT_EMAIL`, `GA_PRIV
 ## Dashboard (primera pestaña)
 Abre por defecto. Junta todo el mes: gasto real contra presupuesto (con proyección), visitas, clics en Reservar y costo por clic (Google Analytics vía `/api/analytics`), insights automáticos, ritmo de gasto (plan acumulado), reparto por plataforma y por sucursal, plan contra real, visitas por día, canales, contenido hecho/planeado y mapa de avance diario. Código en `renderDashboard()` y `drawDash()` de `src/app.js`; estilos en el bloque "Dashboard" de `src/head.html`.
 
-## Gasto real: una vez al día
-Ya no hay botón Actualizar y abrir la app no consulta Meta, TikTok ni Google.
-- `netlify/functions/daily-spend.mjs` (función programada, `42 13 * * *` UTC = 7:42 AM CT en invierno, 8:42 AM en verano) lee Meta, TikTok y el costo de Google Ads (vía Google Analytics) una vez al día y guarda la foto en Netlify Blobs (`snapshots/spend-AAAA-MM`). El día 1 también cierra el mes anterior.
-- `/api/spend-daily` (`spend-daily.mjs`) solo devuelve esa foto. La app la lee y muestra "gasto actualizado <día, hora>".
-- Si una plataforma no tiene llave o falla, se usa el último gasto guardado en `actuals*.json` (TikTok lo actualiza también la tarea diaria de Claude a las 7:42 AM).
-- Llaves en Netlify (Functions): `META_TOKEN` (+ opcional `META_AD_ACCOUNTS`), `TIKTOK_TOKEN` o el token de `/api/tiktok-connect`, `GA_CLIENT_EMAIL`/`GA_PRIVATE_KEY`.
+## Botón Actualizar (gasto en vivo)
+En Dashboard y Anuncios. Llama `/api/spend` (`netlify/functions/spend.mjs`) y vuelve a leer `/api/analytics`.
+- Meta y TikTok: APIs oficiales con llaves de solo lectura (no inicia sesión como usuario). Variables en Netlify (Functions): `META_TOKEN` (System User, `ads_read`), opcional `META_AD_ACCOUNTS`; `TIKTOK_TOKEN` (Marketing API), opcional `TIKTOK_ADVERTISER_ID` (por defecto 6988573869539852289).
+- TikTok sin copiar tokens: con la app "Brasao Dashboard" aprobada en TikTok for Business, pon `TIKTOK_APP_ID` y `TIKTOK_APP_SECRET` en Netlify, haz deploy y abre `/api/tiktok-connect`. `netlify/functions/tiktok-callback.mjs` guarda el token en Netlify Blobs y `/api/spend` lo lee de ahí.
+- Google Ads: costo que ya trae Google Analytics.
+- Si falta una llave, esa plataforma usa el último gasto guardado (`actuals*.json`) y la sección Conexiones del Dashboard dice "Falta llave".

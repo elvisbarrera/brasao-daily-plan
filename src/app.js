@@ -293,7 +293,7 @@ function renderAds(){
     const plan=CAMPS.filter(c=>!/Google/.test(c.platform)).reduce((s,c)=>s+c.amt.slice(0,th).reduce((a,b)=>a+b,0),0);
     const diff=real-plan;
     const bud=(BUDGET&&BUDGET.monthly)||24000, left=bud-real, dl=Math.max(1,NDAYS-th), pace=real/th*NDAYS, pct=Math.min(100,Math.round(100*real/bud));
-    REALH=`<section class="sec"><h2>Gasto real <span>actualizado ${esc(ACTUALS.updated)}</span></h2><div class="tiles"><div class="tile"><small>Gastado</small><b class="num">${money(real)}</b></div><div class="tile"><small>Presupuesto</small><b class="num">${money(bud)}</b></div><div class="tile"><small>${left>=0?'Libre':'Te pasaste'}</small><b class="num" style="color:var(--${left>=0?'ok':'bad'})">${money(Math.abs(left))}</b></div></div><div class="group" style="margin-top:8px"><div class="pbar"><div class="row"><span>${pct}% del presupuesto gastado, día ${th} de ${NDAYS}</span><span class="num">${money(real)}</span></div><div class="track"><i style="width:${pct}%"></i></div><p class="note" style="padding:8px 0 0">${left>=0?'Libre hasta el '+NDAYS+': '+money(left)+' (unos '+money(left/dl)+' al día, '+dl+' días)':'Te pasaste por '+money(-left)}.</p></div></div><div class="group" style="margin-top:8px">`+ACTUALS.platforms.map(p=>`<details class="item"><summary><span>${esc(p.name)}</span><span class="num" style="font-weight:700">${p.spent==null?'—':money(p.spent)}</span></summary>${p.note?`<p>${esc(p.note)}</p>`:''}${(p.campaigns||[]).map(c=>`<p style="display:flex;justify-content:space-between;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><b class="num" style="color:var(--fg)">${money(c.spent)}</b></p>`).join('')}</details>`).join('')+`</div><p class="note">Gasto desde el 1 de ${MES} en Meta, TikTok y Google. Se actualiza una vez al día, a las 7:42 AM CT.</p></section>`;
+    REALH=`<section class="sec"><h2>Gasto real <span>actualizado ${esc(ACTUALS.updated)}</span></h2><div class="tiles"><div class="tile"><small>Gastado</small><b class="num">${money(real)}</b></div><div class="tile"><small>Presupuesto</small><b class="num">${money(bud)}</b></div><div class="tile"><small>${left>=0?'Libre':'Te pasaste'}</small><b class="num" style="color:var(--${left>=0?'ok':'bad'})">${money(Math.abs(left))}</b></div></div><div class="group" style="margin-top:8px"><div class="pbar"><div class="row"><span>${pct}% del presupuesto gastado, día ${th} de ${NDAYS}</span><span class="num">${money(real)}</span></div><div class="track"><i style="width:${pct}%"></i></div><p class="note" style="padding:8px 0 0">${left>=0?'Libre hasta el '+NDAYS+': '+money(left)+' (unos '+money(left/dl)+' al día, '+dl+' días)':'Te pasaste por '+money(-left)}.</p></div></div><div class="group" style="margin-top:8px">`+ACTUALS.platforms.map(p=>`<details class="item"><summary><span>${esc(p.name)}</span><span class="num" style="font-weight:700">${p.spent==null?'—':money(p.spent)}</span></summary>${p.note?`<p>${esc(p.note)}</p>`:''}${(p.campaigns||[]).map(c=>`<p style="display:flex;justify-content:space-between;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(c.name)}</span><b class="num" style="color:var(--fg)">${money(c.spent)}</b></p>`).join('')}</details>`).join('')+`</div><p class="note">Gasto desde el 1 de ${MES} en Meta, TikTok y Google. Toca Actualizar arriba para leerlo en vivo.</p></section>`;
   }
   /* by platform (real) */
   const bud2=(BUDGET&&BUDGET.monthly)||24000;
@@ -387,7 +387,7 @@ function renderAnalytics(){
   h+=`<section class="sec"><h2>Ciudades <span>${MESc} vs ${PMc}</span></h2><div class="group">`+d.cities.filter(c=>c.cur.sessions).map(c=>`<div class="pbar"><div class="row"><span>${esc(c.name)}</span><span class="num">${num(c.cur.sessions)} ${chg(c.cur.sessions,c.prev.sessions)}</span></div><p class="note" style="padding:4px 0 0">${PMc}: ${num(c.prev.sessions)}</p></div>`).join('')+`</div></section>`;
   h+=`<section class="sec"><h2>Páginas más vistas <span>${cap1(MES)}</span></h2><div class="group">`+d.pages.map(p=>`<div class="pbar"><div class="row"><span style="min-width:0;overflow-wrap:anywhere">${esc(p.name)}</span><span class="num">${num(p.value)}</span></div></div>`).join('')+`</div></section>`;
   const age=Math.round((Date.now()-st.at)/60000);
-  h+=`<p class="note">Datos de Google Analytics (www.brasaousa.com), leídos ${age<1?'hace un momento':'hace '+age+' min'}.</p>`;
+  h+=`<p class="note">Datos de Google Analytics (www.brasaousa.com), leídos ${age<1?'hace un momento':'hace '+age+' min'}. <button class="linkbtn" data-anreload="1">Actualizar</button></p>`;
   return h;
 }
 /* Los clics en Reservar, Llamadas y Cómo llegar se empezaron a medir a fines de octubre: avisa cuando el mes anterior no los tiene completos. */
@@ -435,60 +435,53 @@ addEventListener('resize',()=>{ if(S.tab==='analytics') drawChart() });
 
 
 
-/* ---------- Gasto real: una foto al día ----------
-   netlify/functions/daily-spend.mjs lee Meta, TikTok y Google Ads una vez al día (7:42 AM CT) y guarda la foto.
-   La app solo lee esa foto (/api/spend-daily): abrir la página no vuelve a consultar las plataformas.
-   Lo que no esté en la foto se queda con el último gasto guardado (actuals*.json). */
-var LIVE = {};   /* por mes: {st:'loading'|'ok'|'err', d} */
+/* ---------- Gasto en vivo (botón Actualizar) ----------
+   /api/spend lee Meta y TikTok con llaves de solo lectura; Google Ads sale de Google Analytics.
+   Lo que no esté en vivo se queda con el último gasto guardado (actuals*.json). */
+var LIVE = {};   /* por mes: {st:'loading'|'ok'|'err', d, at} */
 var RF = { pending:0, at:0 };
-function loadSpend(m){
-  if(LIVE[m]) return;
-  LIVE[m]={st:'loading'};
-  return fetch(`/api/spend-daily?y=${ym(m).y}&m=${ym(m).m}`)
-    .then(r=>r.json().catch(()=>({ok:false})))
-    .then(j=>{ LIVE[m]= j&&j.ok ? {st:'ok',d:j} : {st:'err',d:j||{}} })
-    .catch(()=>{ LIVE[m]={st:'err',d:{error:'No hay conexión con el servidor de la app.'}} })
+function loadSpend(m, force){
+  if(LIVE[m] && !force && (LIVE[m].st==='loading' || (LIVE[m].st==='ok' && Date.now()-LIVE[m].at<5*60*1000))) return;
+  LIVE[m]={st:'loading', prev:LIVE[m]&&LIVE[m].d};
+  return fetch(`/api/spend?y=${ym(m).y}&m=${ym(m).m}${force?'&t='+Date.now():''}`,{cache:'no-store'})
+    .then(r=>r.json().catch(()=>({ok:false,error:`El servidor respondió ${r.status}.`})))
+    .then(j=>{ LIVE[m]= j&&j.ok ? {st:'ok',d:j,at:Date.now()} : {st:'err',d:j||{},at:Date.now()} })
+    .catch(()=>{ LIVE[m]={st:'err',d:{error:'No hay conexión con el servidor de la app.'},at:Date.now()} })
     .finally(()=>liveDone(m));
 }
 function liveDone(m){ applyLive(m); if((S.tab==='dashboard'||S.tab==='ads'||S.tab==='analytics') && MKEY===m){ const y=scrollY; render(); scrollTo(0,y) } }
 const hhmm = t => new Date(t).toLocaleTimeString('es-MX',{timeZone:'America/Chicago',hour:'numeric',minute:'2-digit'});
-const MES3=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-function stamp(t){ const d=new Date(t), p={}; new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',day:'numeric',month:'numeric',hour:'numeric',minute:'2-digit'}).formatToParts(d).forEach(x=>p[x.type]=x.value); return `${p.day} ${MES3[p.month-1]}, ${p.hour}:${p.minute} ${p.dayPeriod} CT` }
 function applyLive(m){
   if(!LIVE||m!==MKEY) return;
-  const base=MONTHS[m].actuals||{}, L=LIVE[m], D=L&&L.st==='ok'?L.d:null;
-  const plats=(base.platforms||[]).map(p=>({...p}));
-  const put=(re,name,o)=>{ const i=plats.findIndex(p=>re.test(p.name)), v={name,...o}; if(i<0) plats.push(v); else plats[i]=v };
-  const asOfDay=a=>{ const n=parseInt(String(a||''),10); return isNaN(n)?0:n };
-  if(D){
-    const day=stamp(D.at);
-    if(D.meta&&D.meta.status==='ok') put(/Meta/,'Meta · Instagram + Facebook',{spent:D.meta.spent,campaigns:D.meta.campaigns,asOf:day,note:`Meta Ads, 1–${D.through} ${MES3[ym(m).m-1]}.`});
-    if(D.tiktok&&D.tiktok.status==='ok') put(/TikTok/,'TikTok',{spent:D.tiktok.spent,campaigns:D.tiktok.campaigns,asOf:day,note:`TikTok Ads, 1–${D.through} ${MES3[ym(m).m-1]}.`});
-    if(D.google&&D.google.status==='ok') put(/Google/,'Google Ads',{spent:D.google.spent,campaigns:D.google.campaigns,asOf:day,note:`Costo de Google Ads según Google Analytics, 1–${D.through} ${MES3[ym(m).m-1]}.`});
-  }
-  /* Fecha que se muestra: la actualización diaria más reciente. */
-  const th=Math.max(base.through||0, D?D.through:0, ...plats.map(p=>asOfDay(p.asOf)));
-  const newest=D?stamp(D.at):(plats.map(p=>p.asOf).filter(a=>/AM|PM/.test(a||'')).sort((a,b)=>asOfDay(b)-asOfDay(a))[0]||String(base.updated||'').split('·')[0].trim());
-  plats.forEach(p=>{ if(p.asOf&&p.asOf!==newest) p.note=(p.note?p.note+' ':'')+`Último dato: ${p.asOf}.` });
-  ACTUALS={...base, platforms:plats, through:th, updated:newest};
+  const base=MONTHS[m].actuals||{}, L=LIVE[m], ga=AN[m]&&AN[m].st==='ok'?AN[m].d:null;
+  const plats=(base.platforms||[]).map(p=>({...p})), live=[];
+  let th=0, at=0;
+  const put=(re,name,o)=>{ const i=plats.findIndex(p=>re.test(p.name)), v={name,...o,live:true}; if(i<0) plats.push(v); else plats[i]=v };
+  const Ld=L&&(L.st==='ok'?L.d:null);
+  if(Ld){ if(Ld.meta.status==='ok'){ put(/Meta/,'Meta · Instagram + Facebook',{spent:Ld.meta.spent,campaigns:Ld.meta.campaigns,note:`En vivo desde Meta Ads (${Ld.meta.accounts} ${Ld.meta.accounts===1?'cuenta':'cuentas'}).`}); live.push('Meta') }
+          if(Ld.tiktok.status==='ok'){ put(/TikTok/,'TikTok',{spent:Ld.tiktok.spent,campaigns:Ld.tiktok.campaigns,note:'En vivo desde TikTok Ads.'}); live.push('TikTok') }
+          if(live.length){ th=Ld.through; at=L.at } }
+  if(ga&&ga.googleAds){ put(/Google/,'Google Ads',{spent:ga.googleAds.cur.cost,campaigns:ga.googleAds.campaigns||[],note:'En vivo: costo de Google Ads ligado a Google Analytics (puede ir unas horas atrás).'}); live.push('Google'); th=Math.max(th,ga.through); at=Math.max(at,AN[m].at) }
+  if(!live.length){ ACTUALS=MONTHS[m].actuals; return }
+  const stale=plats.filter(p=>!p.live).map(p=>{ const g=p.asOf||String(base.updated||'').split('·')[0].trim(); p.note=(p.note?p.note+' ':'')+`Guardado: ${g}.`; return p.name.split(' ·')[0]+' '+g });
+  ACTUALS={...base, platforms:plats, through:th, live,
+    updated:`en vivo ${hhmm(at)} (${live.join(', ')})`+(stale.length?` · guardado: ${stale.join(', ')}`:'')};
+}
+function refreshAll(){
+  RF.pending=2; render();
+  const done1=()=>{ if(--RF.pending<=0){ RF.at=Date.now(); toast('Actualizado'); const y=scrollY; render(); scrollTo(0,y) } };
+  loadAN(MKEY,true); const w=setInterval(()=>{ if(!AN[MKEY]||AN[MKEY].st!=='loading'){ clearInterval(w); done1() } },250);
+  Promise.resolve(loadSpend(MKEY,true)).finally(done1);
 }
 const busy = () => RF.pending>0;
 function connRows(){
-  const L=LIVE[MKEY], A=AN[MKEY], D=L&&L.st==='ok'?L.d:null, base=MONTHS[MKEY].actuals||{};
-  const saved=re=>{ const p=(base.platforms||[]).find(x=>re.test(x.name)); return p&&p.asOf&&/AM|PM/.test(p.asOf) };
-  const plat=(k,re)=>{
-    if(!L||L.st==='loading') return [['info','Cargando'],''];
-    const x=D&&D[k];
-    if(x&&x.status==='ok') return [['ok','Diario'],''];
-    if(saved(re)) return [['ok','Diario'],''];
-    if(!D) return [['warn','Guardado'],'Usa el último gasto guardado hasta la próxima actualización de las 7:42 AM.'];
-    return [x&&x.status==='setup'?['warn','Falta llave']:['bad','Error'], x&&x.error];
-  };
+  const L=LIVE[MKEY], A=AN[MKEY];
+  const st=(s,err)=>s==='ok'?['ok','En vivo']:s==='setup'?['warn','Falta llave']:s==='loading'||s==null?['info','Cargando']:['bad',err||'Error'];
   const rows=[
-    ['Meta (Instagram + Facebook)', ...plat('meta',/Meta/)],
-    ['TikTok Ads', ...plat('tiktok',/TikTok/)],
-    ['Google Ads', ...plat('google',/Google/)],
-    ['Google Analytics (web)', A&&A.st==='ok'?['ok','Conectado']:A&&A.st==='err'?(A.d.code==='setup'?['warn','Falta llave']:['bad','Error']):['info','Cargando'], A&&A.d&&A.d.error]];
+    ['Meta (Instagram + Facebook)', L&&L.st==='ok'?st(L.d.meta.status):L&&L.st==='err'?st('err'):st(null), L&&L.st==='ok'?L.d.meta.error:L&&L.d&&L.d.error],
+    ['TikTok Ads', L&&L.st==='ok'?st(L.d.tiktok.status):L&&L.st==='err'?st('err'):st(null), L&&L.st==='ok'?L.d.tiktok.error:L&&L.d&&L.d.error],
+    ['Google Ads', A&&A.st==='ok'?(A.d.googleAds?st('ok'):['warn','Sin datos']):A&&A.st==='err'?st(A.d.code==='setup'?'setup':'err'):st(null), A&&A.st==='ok'&&!A.d.googleAds?'Google Analytics no trae costo de Google Ads este mes.':A&&A.d&&A.d.error],
+    ['Google Analytics (web)', A&&A.st==='ok'?st('ok'):A&&A.st==='err'?st(A.d.code==='setup'?'setup':'err'):st(null), A&&A.d&&A.d.error]];
   return rows.map(([n,[c,l],e])=>`<div class="conn"><span class="cd ${c}"></span><span class="cn">${n}${e&&c!=='ok'?`<small>${esc(e)}</small>`:''}</span><span class="cs ${c}">${l}</span></div>`).join('');
 }
 
@@ -608,9 +601,9 @@ function renderDashboard(){
   hm+=`</div><div class="heat-leg"><span>0%</span>${[0,25,50,75,100].map(v=>`<i style="background:color-mix(in srgb,var(--ok) ${v?Math.round(12+.88*v):0}%,var(--surface2))"></i>`).join('')}<span>100%</span><span style="margin-left:auto">Toca un día para abrirlo</span></div>`;
   h+=`<section class="sec"><h2>Mapa de avance <span>% del plan marcado</span></h2><div class="group">${hm}</div><p class="note">Las casillas se guardan en este navegador. En otro dispositivo el avance sale vacío.</p></section>`;
 
-  h+=`<section class="sec"><h2>Conexiones <span>de dónde salen los números</span></h2><div class="group">${connRows()}</div><p class="note">El gasto se lee una vez al día (7:42 AM CT) con llaves de solo lectura. Abrir la app no vuelve a consultar las plataformas.</p></section>`;
+  h+=`<section class="sec"><h2>Conexiones <span>de dónde salen los números</span></h2><div class="group">${connRows()}</div><p class="note">Todas se leen con llaves de solo lectura desde el servidor de la app. No inician sesión en tus cuentas.</p></section>`;
   const age=st&&st.at?Math.round((Date.now()-st.at)/60000):null;
-  h+=`<p class="note">Fuentes: plan del Google Sheet de ${MES}; gasto real de Meta, TikTok y Google (${ACTUALS&&ACTUALS.updated?esc(ACTUALS.updated):'sin datos'}); web de Google Analytics${age!=null&&ga?` (leído ${age<1?'hace un momento':'hace '+age+' min'})`:''}.</p>`;
+  h+=`<p class="note">Fuentes: plan del Google Sheet de ${MES}; gasto real de Meta, TikTok y Google (${ACTUALS&&ACTUALS.updated?esc(ACTUALS.updated):'sin datos'}); web de Google Analytics${age!=null&&ga?` (leído ${age<1?'hace un momento':'hace '+age+' min'})`:''}. <button class="linkbtn" data-refresh="1">Actualizar</button></p>`;
   return h+`</div>`;
 }
 
@@ -690,8 +683,8 @@ function renderBar(){
       <div class="daynav"><button class="circ" data-step="-1" aria-label="Día anterior" ${S.day<=1?'disabled':''}>‹</button>${S.day!==TODAY?'<button class="pill-btn" data-today="1">Hoy</button>':''}<button class="circ" data-step="1" aria-label="Día siguiente" ${S.day>=NDAYS?'disabled':''}>›</button></div></div>`;
   } else {
     const t={dashboard:['Dashboard',`Todo ${MES} de un vistazo`],semana:['Semana','Elige un día del mes'],ads:['Anuncios',`Plan del día ${S.day} de ${MES}`],analytics:['Analíticos',`Google Analytics · ${MES} contra ${MES_ES[prevM(MNUM)]}`],guia:['Guía','Reglas, alertas y metas']}[S.tab];
-    const rfb='';
-    const sub2=(S.tab==='dashboard'||S.tab==='ads')&&ACTUALS&&ACTUALS.updated?`${t[1]} · gasto actualizado ${esc(ACTUALS.updated)}`:t[1];
+    const rfb=(S.tab==='dashboard'||S.tab==='ads')?`<button class="rf ${busy()?'busy':''}" data-refresh="1" aria-label="Actualizar gasto y analíticos" title="Actualizar" ${busy()?'aria-busy="true"':''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>`:'';
+    const sub2=(S.tab==='dashboard'||S.tab==='ads')&&ACTUALS&&ACTUALS.updated?`${t[1]} · gasto ${esc(ACTUALS.updated.split(' · ')[0])}`:t[1];
     h+=`<div class="title-row"><div style="min-width:0"><h1 class="large">${t[0]}</h1><p class="sub">${sub2}</p></div>${rfb}</div>`;
   }
   if(S.tab==='hoy'||S.tab==='ads') h+=`<div class="seg" role="group" aria-label="Sucursal">`+LOCS.map(l=>`<button data-loc="${l[0]}" aria-pressed="${S.loc===l[0]}">${l[1]}</button>`).join('')+`</div>`;
@@ -728,6 +721,7 @@ document.addEventListener('click',e=>{
   if(b.dataset.go){ S.day=+b.dataset.go; S.tab='hoy'; render(); scrollTo(0,0); return }
   if(b.dataset.anm){ ANS.metric=b.dataset.anm; const y=scrollY; render(); scrollTo(0,y); return }
   if(b.dataset.anreload){ loadAN(MKEY,true); const y=scrollY; render(); scrollTo(0,y); return }
+  if(b.dataset.refresh){ if(!busy()) refreshAll(); return }
   if(b.dataset.dseg){ DS.seg=DS.seg===b.dataset.dseg?null:b.dataset.dseg; const y=scrollY; render(); scrollTo(0,y); return }
   if(b.dataset.plat){ S.plat=b.dataset.plat; const y=scrollY; render(); scrollTo(0,y); return }
 });

@@ -272,8 +272,10 @@ td.g{color:var(--ok);font-weight:600} td.y{color:var(--warn);font-weight:600} td
 .dh-big small{font-size:15px;font-weight:500;color:#9aa6bc;letter-spacing:0;margin-left:4px}
 .dh-s{font-size:13px;color:#b9c3d6;margin-top:6px}
 .gauge{--p:0;width:86px;height:86px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--gc,#5b93ff) calc(var(--p)*1%),rgba(255,255,255,.12) 0);transition:--p .6s}
-.gauge i{font-style:normal;width:70px;height:70px;border-radius:50%;background:#0a1222;display:grid;place-items:center;text-align:center;line-height:1.05;font-weight:700;font-size:18px}
-.gauge i small{display:block;font-size:10px;font-weight:600;color:#9aa6bc;letter-spacing:.04em}
+.gauge i{font-style:normal;width:70px;height:70px;border-radius:50%;background:#0a1222;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center;line-height:1;font-weight:700;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.gauge i b{font-weight:700;display:flex;align-items:baseline}
+.gauge i b sup{font-size:.6em;font-weight:600;margin-left:1px;vertical-align:baseline;position:static}
+.gauge i small{display:block;font-size:8.5px;font-weight:600;color:#9aa6bc;letter-spacing:.08em}
 .dh-bar{position:relative;z-index:1;margin-top:14px;height:8px;border-radius:5px;background:rgba(255,255,255,.12);overflow:visible}
 .dh-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:linear-gradient(90deg,#5b93ff,#8fb4ff)}
 .dh-bar b{position:absolute;top:-4px;width:2px;height:16px;background:#e2c07a;border-radius:1px}

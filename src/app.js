@@ -532,7 +532,7 @@ function renderDashboard(){
   h+=`<section class="dh"><div class="dh-top"><div style="min-width:0"><p class="dh-k">Inversión en anuncios · ${MES}</p>
     <p class="dh-big num">${real==null?'—':money(real)}<small>de ${money(bud)}</small></p>
     <p class="dh-s">${real==null?`Todavía no hay gasto real de ${MES}.`:`Al día ${th} de ${NDAYS}. El plan del Sheet iba en ${money(planTo)} (${real>=planTo?'+':'−'}${money(Math.abs(real-planTo))}).`}</p></div>
-    <div class="gauge" style="--p:${Math.min(100,pct)};--gc:${gc}"><i>${pct}%<small>GASTADO</small></i></div></div>
+    <div class="gauge" style="--p:${Math.min(100,pct)};--gc:${gc}"><i><b>${pct}<sup>%</sup></b><small>GASTADO</small></i></div></div>
     <div class="dh-bar" aria-hidden="true"><i style="width:${Math.min(100,pct)}%"></i>${th?`<b style="left:calc(${Math.min(100,100*th/NDAYS)}% - 1px)" title="Día del mes"></b>`:''}</div>
     <div class="dh-leg"><span>${proj==null?'Sin proyección':`Al ritmo actual cierras en <b style="color:#edf1f8">${money(proj)}</b>`}</span><span><i style="display:inline-block;width:2px;height:10px;background:#e2c07a;vertical-align:-1px;margin-right:5px"></i>día ${th||'—'}</span></div></section>`;
 
